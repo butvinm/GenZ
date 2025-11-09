@@ -100,14 +100,29 @@ pub fn BGV() type {
         /// known attacks. Let R = Z[x]/(x^d + 1) and let params = (q, d, n, N, χ)
         const R = QuotientPolyRing(N, Q);
 
+        const SecretKey = [n + 1]R;
+
         /// E.SecretKeyGen(params): Draw s' ← χn . Set sk = s ← (1, s'[1], . . . , s'[n]) ∈ R_q^{n+1}
-        pub fn secretKeyGen() [n + 1]R {
+        pub fn secretKeyGen() SecretKey {
             var one: R = .{ .c = @splat(0) };
             one.c[0] = 1;
 
             var sPrime: R = .{ .c = @splat(0) };
             for (0..N) |i| sPrime.c[i] = chi();
             return .{ one, sPrime };
+        }
+
+        /// E.PublicKeyGen(params, sk): Takes as input a secret key sk = s = (1, s0 ) with s[0] = 1 and
+        /// s0 ∈ Rqn and the params. Generate matrix A0 ← RqN ×n uniformly and a vector e ← χN and set
+        /// b ← A0 s0 + 2e. Set A to be the (n + 1)-column matrix consisting of b followed by the n columns of −A0.
+        /// (Observe: A · s = 2e.) Set the public key pk = A.
+        pub fn publicKeyGen(sk: SecretKey) [N][n + 1]R {
+            const aPrime: [N][n]R = .{};
+            for (0..N) |i| {
+                for (0..n) |j| {
+                    aPrime.c[i][j] = chi();
+                }
+            }
         }
 
         fn chi() i2 {

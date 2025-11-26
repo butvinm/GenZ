@@ -4,7 +4,7 @@ This project includes third-party software components.
 
 ## OpenFHE
 
-- **Location:** `3rd-party/openfhe`
+- **Location:** `third-party/openfhe`
 - **Version:** 1.4.2
 - **Source:** https://github.com/openfheorg/openfhe-development
 - **License:** BSD 2-Clause License

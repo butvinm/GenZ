@@ -1,0 +1,3 @@
+[submodule "3rd-party/openfhe"]
+	path = 3rd-party/openfhe
+	url = https://github.com/openfheorg/openfhe-development.git

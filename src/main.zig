@@ -1,64 +1,122 @@
 const std = @import("std");
 const httpz = @import("httpz");
-const uuid = @import("uuid");
+const pg = @import("pg");
+
+const server = @import("server.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
-    const address = "0.0.0.0";
-    const port = 5882;
+    var args = try std.process.ArgIterator.initWithAllocator(allocator);
+    defer args.deinit();
 
-    var app = App{};
-    var server = try httpz.Server(*App).init(allocator, .{ .address = address, .port = port }, &app);
-    defer {
-        server.stop();
-        server.deinit();
-    }
-
-    var router = try server.router(.{});
-    router.post("/api/v0.1.0/register", register, .{});
-    // router.post("/api/v0.1.0/analyze", analyze, .{});
-
-    std.log.info("Server is listening on http://{[address]s}:{[port]}", .{ .address = address, .port = port });
-    try server.listen();
-}
-
-const App = struct {
-    pub fn savePublicKey(_: App, publicKey: []u8) !void {
-        const file = try std.fs.cwd().createFile("public_key.bin", .{});
-        defer file.close();
-        try file.writeAll(publicKey);
-    }
-};
-
-const RegisterRequest = struct {
-    public_key: []u8,
-
-    pub fn validateRequest(alloc: std.mem.Allocator, req: *httpz.Request) anyerror!RegisterRequest {
-        const request_raw = try req.json(struct { public_key: []u8 }) orelse return error.ValidationError;
-        const decodedSize = try std.base64.standard.Decoder.calcSizeForSlice(request_raw.public_key);
-        const request = RegisterRequest{ .public_key = try alloc.alloc(u8, decodedSize) };
-        try std.base64.standard.Decoder.decode(request.public_key, request_raw.public_key);
-        return request;
-    }
-};
-
-/// Accept public kes from the user and assign user a session ID for later communication
-fn register(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
-    const request = RegisterRequest.validateRequest(res.arena, req) catch |err| {
-        std.log.info("422 {} {s} {}", .{ req.method, req.url.path, err });
-        res.status = 422;
-        res.body = "Unprocessable Content";
-        return;
+    const config = switch (parseArgs(allocator, &args)) {
+        .ok => |cfg| cfg,
+        .err => |msg| {
+            std.log.err("{s}", .{msg});
+            allocator.free(msg);
+            return error.ConfigBadArgs;
+        },
     };
-    try app.savePublicKey(request.public_key);
-    const sessionId = uuid.v4.new();
-    res.status = 200;
-    try res.json(.{ .sessionId = uuid.urn.serialize(sessionId) }, .{});
+
+    var db = try pg.Pool.init(allocator, .{
+        .connect = .{ .port = config.dbPort, .host = config.dbHost },
+        .auth = .{ .username = config.dbUser, .database = config.dbDatabase, .password = config.dbPassword },
+    });
+    defer db.deinit();
+
+    var app = server.App{
+        .db = db,
+        .config = config,
+    };
+    try app.initDb();
+
+    var appServer = try server.initServer(allocator, &app);
+    defer {
+        appServer.stop();
+        appServer.deinit();
+    }
+
+    std.log.info("Server is listening on http://{s}:{}\n", .{ config.appHost, config.appPort });
+    try appServer.listen();
 }
 
-// fn analyze(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
-//     res.status = 200;
-//     try res.json(.{ .name = "Teg" }, .{});
-// }
+pub const ParseArgsResult = union(enum) {
+    ok: server.AppConfig,
+    err: []const u8, // allocated, caller must free on error
+};
+
+pub fn parseArgs(alloc: std.mem.Allocator, args: *std.process.ArgIterator) ParseArgsResult {
+    var appHost: ?[]const u8 = null;
+    var appPort: ?u16 = null;
+    var dbPort: ?u16 = null;
+    var dbHost: ?[]const u8 = null;
+    var dbUser: ?[]const u8 = null;
+    var dbPassword: ?[]const u8 = null;
+    var dbDatabase: ?[]const u8 = null;
+
+    const exec = args.next() orelse "app";
+    while (args.next()) |flag| {
+        if (std.mem.eql(u8, flag, "--app-host")) {
+            appHost = args.next() orelse return expectedArgValueError(alloc, flag, "app host");
+        } else if (std.mem.eql(u8, flag, "--app-port")) {
+            const appPortArg = args.next() orelse return expectedArgValueError(alloc, flag, "app port");
+            appPort = std.fmt.parseInt(u16, appPortArg, 10) catch {
+                return .{ .err = alloc.dupe(u8, "app port must be a number") catch "app port must be a number" };
+            };
+        } else if (std.mem.eql(u8, flag, "--db-host")) {
+            dbHost = args.next() orelse return expectedArgValueError(alloc, flag, "db host");
+        } else if (std.mem.eql(u8, flag, "--db-port")) {
+            const dbPortArg = args.next() orelse return expectedArgValueError(alloc, flag, "db port");
+            dbPort = std.fmt.parseInt(u16, dbPortArg, 10) catch {
+                return .{ .err = alloc.dupe(u8, "db port must be a number") catch "db port must be a number" };
+            };
+        } else if (std.mem.eql(u8, flag, "--db-user")) {
+            dbUser = args.next() orelse return expectedArgValueError(alloc, flag, "db user");
+        } else if (std.mem.eql(u8, flag, "--db-password")) {
+            dbPassword = args.next() orelse return expectedArgValueError(alloc, flag, "db password");
+        } else if (std.mem.eql(u8, flag, "--db-database")) {
+            dbDatabase = args.next() orelse return expectedArgValueError(alloc, flag, "db database");
+        }
+    }
+
+    if (appHost == null) return missedArgError(alloc, exec, "--app-host");
+    if (appPort == null) return missedArgError(alloc, exec, "--app-port");
+    if (dbHost == null) return missedArgError(alloc, exec, "--db-host");
+    if (dbPort == null) return missedArgError(alloc, exec, "--db-port");
+    if (dbUser == null) return missedArgError(alloc, exec, "--db-user");
+    if (dbPassword == null) return missedArgError(alloc, exec, "--db-password");
+    if (dbDatabase == null) return missedArgError(alloc, exec, "--db-database");
+
+    return .{ .ok = .{
+        .appHost = appHost.?,
+        .appPort = appPort.?,
+        .dbPort = dbPort.?,
+        .dbHost = dbHost.?,
+        .dbUser = dbUser.?,
+        .dbPassword = dbPassword.?,
+        .dbDatabase = dbDatabase.?,
+    } };
+}
+
+fn expectedArgValueError(alloc: std.mem.Allocator, argFlag: []const u8, argName: []const u8) ParseArgsResult {
+    const msg = std.fmt.allocPrint(alloc, "{s}: expected {s} value", .{ argFlag, argName }) catch "expected argument value";
+    return .{ .err = msg };
+}
+
+fn missedArgError(alloc: std.mem.Allocator, exec: []const u8, argFlag: []const u8) ParseArgsResult {
+    const msg = std.fmt.allocPrint(alloc,
+        \\{s} missing
+        \\usage: {s} [options]
+        \\Options:
+        \\  --app-host       Host to serve application
+        \\  --app-port       Port to serve application
+        \\  --db-host        Database host
+        \\  --db-port        Database port
+        \\  --db-user        Database user
+        \\  --db-password    Database password
+        \\  --db-database    Database name
+    , .{ argFlag, exec }) catch "error: missing required argument";
+    return .{ .err = msg };
+}

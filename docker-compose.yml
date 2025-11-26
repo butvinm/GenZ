@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT}:6969"
+    depends_on:
+      - db
+    command:
+      - /app/GenZ
+      - --app-host
+      - "0.0.0.0"
+      - --app-port
+      - "6969"
+      - --db-host
+      - db
+      - --db-port
+      - "5432"
+      - --db-user
+      - ${DB_USER}
+      - --db-password
+      - ${DB_PASSWORD}
+      - --db-database
+      - ${DB_DATABASE}
+
+  db:
+    image: postgres:18
+    ports:
+      - "${DB_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE}

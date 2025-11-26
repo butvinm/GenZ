@@ -1,0 +1,101 @@
+const std = @import("std");
+const pg = @import("pg");
+const httpz = @import("httpz");
+const uuid = @import("uuid");
+
+pub const AppConfig = struct {
+    appHost: []const u8,
+    appPort: u16,
+    dbPort: u16,
+    dbHost: []const u8,
+    dbUser: []const u8,
+    dbPassword: []const u8,
+    dbDatabase: []const u8,
+};
+
+pub const App = struct {
+    db: *pg.Pool,
+    config: AppConfig,
+
+    pub fn initDb(self: *App) !void {
+        var conn = try self.db.acquire();
+        defer conn.release();
+
+        _ = try conn.exec(
+            \\CREATE TABLE IF NOT EXISTS keys (
+            \\    session_id UUID,
+            \\    public_key bytea,
+            \\    issued_at timestamp
+            \\);
+        ,
+            .{},
+        );
+
+        try conn.commit();
+    }
+
+    pub fn uncaughtError(_: *App, req: *httpz.Request, res: *httpz.Response, err: anyerror) void {
+        std.log.info("500 {} {s} {}", .{ req.method, req.url.path, err });
+        res.status = 500;
+        res.body = "sorry";
+    }
+};
+
+pub fn initServer(alloc: std.mem.Allocator, app: *App) !httpz.Server(*App) {
+    var server = try httpz.Server(*App).init(alloc, .{ .address = app.config.appHost, .port = app.config.appPort }, app);
+
+    var router = try server.router(.{});
+    router.post("/api/v0.1.0/register", register, .{});
+
+    return server;
+}
+
+const RegisterRequest = struct {
+    publicKey: []u8,
+
+    pub fn validateRequest(alloc: std.mem.Allocator, req: *httpz.Request) anyerror!RegisterRequest {
+        const request_raw = try req.json(struct { publicKey: []u8 }) orelse return error.ValidationError;
+        const decodedSize = try std.base64.standard.Decoder.calcSizeForSlice(request_raw.publicKey);
+        const request = RegisterRequest{ .publicKey = try alloc.alloc(u8, decodedSize) };
+        try std.base64.standard.Decoder.decode(request.publicKey, request_raw.publicKey);
+        return request;
+    }
+};
+
+/// Accept public keys from the user and assign user a session ID for later communication
+fn register(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
+    const request = RegisterRequest.validateRequest(res.arena, req) catch |err| {
+        std.log.info("422 {} {s} {}", .{ req.method, req.url.path, err });
+        res.status = 422;
+        res.body = "Unprocessable Content";
+        return;
+    };
+
+    const sessionId = uuid.v4.new();
+    const issuedAt = std.time.microTimestamp();
+    const publicKey = request.publicKey;
+
+    // try app.savePublicKey(request.public_key);
+    var conn = try app.db.acquire();
+    defer conn.release();
+
+    _ = conn.exec(
+        "INSERT INTO keys (session_id, public_key, issued_at) VALUES ($1, $2, $3);",
+        .{ uuid.urn.serialize(sessionId), publicKey, issuedAt },
+    ) catch |err| {
+        if (err == error.PG) {
+            if (conn.err) |pge| {
+                std.log.err("PG {s}\n", .{pge.message});
+            }
+        }
+        return err;
+    };
+
+    res.status = 200;
+    try res.json(.{ .sessionId = uuid.urn.serialize(sessionId) }, .{});
+}
+
+// fn analyze(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
+//     res.status = 200;
+//     try res.json(.{ .name = "Teg" }, .{});
+// }

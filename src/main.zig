@@ -1,27 +1,122 @@
 const std = @import("std");
-const GenZ = @import("GenZ");
+const httpz = @import("httpz");
+const pg = @import("pg");
+
+const server = @import("server.zig");
 
 pub fn main() !void {
-    // Prints to stderr, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
-    try GenZ.bufferedPrint();
-}
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
 
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
+    var args = try std.process.ArgIterator.initWithAllocator(allocator);
+    defer args.deinit();
 
-test "fuzz example" {
-    const Context = struct {
-        fn testOne(context: @This(), input: []const u8) anyerror!void {
-            _ = context;
-            // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-            try std.testing.expect(!std.mem.eql(u8, "canyoufindme", input));
-        }
+    const config = switch (parseArgs(allocator, &args)) {
+        .ok => |cfg| cfg,
+        .err => |msg| {
+            std.log.err("{s}", .{msg});
+            allocator.free(msg);
+            return error.ConfigBadArgs;
+        },
     };
-    try std.testing.fuzz(Context{}, Context.testOne, .{});
+
+    var db = try pg.Pool.init(allocator, .{
+        .connect = .{ .port = config.dbPort, .host = config.dbHost },
+        .auth = .{ .username = config.dbUser, .database = config.dbDatabase, .password = config.dbPassword },
+    });
+    defer db.deinit();
+
+    var app = server.App{
+        .db = db,
+        .config = config,
+    };
+    try app.initDb();
+
+    var appServer = try server.initServer(allocator, &app);
+    defer {
+        appServer.stop();
+        appServer.deinit();
+    }
+
+    std.log.info("Server is listening on http://{s}:{}\n", .{ config.appHost, config.appPort });
+    try appServer.listen();
+}
+
+pub const ParseArgsResult = union(enum) {
+    ok: server.AppConfig,
+    err: []const u8, // allocated, caller must free on error
+};
+
+pub fn parseArgs(alloc: std.mem.Allocator, args: *std.process.ArgIterator) ParseArgsResult {
+    var appHost: ?[]const u8 = null;
+    var appPort: ?u16 = null;
+    var dbPort: ?u16 = null;
+    var dbHost: ?[]const u8 = null;
+    var dbUser: ?[]const u8 = null;
+    var dbPassword: ?[]const u8 = null;
+    var dbDatabase: ?[]const u8 = null;
+
+    const exec = args.next() orelse "app";
+    while (args.next()) |flag| {
+        if (std.mem.eql(u8, flag, "--app-host")) {
+            appHost = args.next() orelse return expectedArgValueError(alloc, flag, "app host");
+        } else if (std.mem.eql(u8, flag, "--app-port")) {
+            const appPortArg = args.next() orelse return expectedArgValueError(alloc, flag, "app port");
+            appPort = std.fmt.parseInt(u16, appPortArg, 10) catch {
+                return .{ .err = alloc.dupe(u8, "app port must be a number") catch "app port must be a number" };
+            };
+        } else if (std.mem.eql(u8, flag, "--db-host")) {
+            dbHost = args.next() orelse return expectedArgValueError(alloc, flag, "db host");
+        } else if (std.mem.eql(u8, flag, "--db-port")) {
+            const dbPortArg = args.next() orelse return expectedArgValueError(alloc, flag, "db port");
+            dbPort = std.fmt.parseInt(u16, dbPortArg, 10) catch {
+                return .{ .err = alloc.dupe(u8, "db port must be a number") catch "db port must be a number" };
+            };
+        } else if (std.mem.eql(u8, flag, "--db-user")) {
+            dbUser = args.next() orelse return expectedArgValueError(alloc, flag, "db user");
+        } else if (std.mem.eql(u8, flag, "--db-password")) {
+            dbPassword = args.next() orelse return expectedArgValueError(alloc, flag, "db password");
+        } else if (std.mem.eql(u8, flag, "--db-database")) {
+            dbDatabase = args.next() orelse return expectedArgValueError(alloc, flag, "db database");
+        }
+    }
+
+    if (appHost == null) return missedArgError(alloc, exec, "--app-host");
+    if (appPort == null) return missedArgError(alloc, exec, "--app-port");
+    if (dbHost == null) return missedArgError(alloc, exec, "--db-host");
+    if (dbPort == null) return missedArgError(alloc, exec, "--db-port");
+    if (dbUser == null) return missedArgError(alloc, exec, "--db-user");
+    if (dbPassword == null) return missedArgError(alloc, exec, "--db-password");
+    if (dbDatabase == null) return missedArgError(alloc, exec, "--db-database");
+
+    return .{ .ok = .{
+        .appHost = appHost.?,
+        .appPort = appPort.?,
+        .dbPort = dbPort.?,
+        .dbHost = dbHost.?,
+        .dbUser = dbUser.?,
+        .dbPassword = dbPassword.?,
+        .dbDatabase = dbDatabase.?,
+    } };
+}
+
+fn expectedArgValueError(alloc: std.mem.Allocator, argFlag: []const u8, argName: []const u8) ParseArgsResult {
+    const msg = std.fmt.allocPrint(alloc, "{s}: expected {s} value", .{ argFlag, argName }) catch "expected argument value";
+    return .{ .err = msg };
+}
+
+fn missedArgError(alloc: std.mem.Allocator, exec: []const u8, argFlag: []const u8) ParseArgsResult {
+    const msg = std.fmt.allocPrint(alloc,
+        \\{s} missing
+        \\usage: {s} [options]
+        \\Options:
+        \\  --app-host       Host to serve application
+        \\  --app-port       Port to serve application
+        \\  --db-host        Database host
+        \\  --db-port        Database port
+        \\  --db-user        Database user
+        \\  --db-password    Database password
+        \\  --db-database    Database name
+    , .{ argFlag, exec }) catch "error: missing required argument";
+    return .{ .err = msg };
 }

@@ -36,6 +36,20 @@ jobs:
           path: /tmp/genz-image.tar
           retention-days: 1
 
+  gitleaks:
+    name: Gitleaks Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   trivy-config:
     name: Trivy Config Scan
     runs-on: ubuntu-latest

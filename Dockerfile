@@ -18,9 +18,15 @@ RUN zig build
 
 FROM alpine:3.22.2
 
+RUN adduser -D -u 1000 appuser
+
 WORKDIR /app
 
 COPY --from=build /app/zig-out/bin/GenZ /app
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 5882
 

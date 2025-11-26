@@ -24,7 +24,10 @@ zig build test
 ## Docker
 
 ```bash
-# Start services (app + postgres)
+# Generate SSL certificates (first time or to rotate)
+./scripts/generate-certs.sh
+
+# Start services (nginx + app + postgres)
 docker-compose up
 
 # Build only
@@ -32,6 +35,15 @@ docker-compose build
 ```
 
 Environment variables are configured in `.env`.
+
+### SSL/HTTPS
+
+The service uses Nginx as a reverse proxy with self-signed SSL certificates:
+- `scripts/generate-certs.sh` - Generates certificates to `certs/` directory
+- `nginx/nginx.conf` - Nginx configuration with SSL termination
+- Certificates are mounted as volumes (not baked into images)
+
+API is available at `https://localhost:443` (use `-k` with curl for self-signed certs).
 
 ## Architecture
 
@@ -55,3 +67,9 @@ All arguments are required:
 ## API Endpoints
 
 - `POST /api/v0.1.0/register` - Register a public key, returns a session UUID
+
+## Zig reference
+
+- https://www.openmymind.net/learning_zig/
+- https://ziglang.org/documentation/0.15.2/
+- https://ziglang.org/documentation/0.15.2/std/

@@ -3,8 +3,26 @@ const httpz = @import("httpz");
 const pg = @import("pg");
 
 const server = @import("server.zig");
+const openfhe = @import("openfhe.zig");
+
+// Reference imported modules to include their tests
+comptime {
+    std.testing.refAllDecls(openfhe);
+}
 
 pub fn main() !void {
+    // Test OpenFHE BGV wrapper
+    std.log.info("Initializing OpenFHE BGV context...", .{});
+    var ctx = openfhe.CryptoContext.createBgv(.{
+        .multiplicative_depth = 2,
+        .plaintext_modulus = 65537,
+    }) catch |err| {
+        std.log.err("Failed to create BGV context: {s}", .{openfhe.getLastError()});
+        return err;
+    };
+    defer ctx.deinit();
+    std.log.info("OpenFHE BGV context created. Ring dimension: {}", .{ctx.getRingDim()});
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 

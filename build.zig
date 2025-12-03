@@ -7,6 +7,28 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
+    // Build OpenFHE using CMake
+    const openfhe_build_dir = "third-party/openfhe/build";
+
+    const cmake_configure = b.addSystemCommand(&.{
+        "cmake",
+        "-S", "third-party/openfhe",
+        "-B", openfhe_build_dir,
+        "-DBUILD_UNITTESTS=OFF",
+        "-DBUILD_EXAMPLES=OFF",
+        "-DBUILD_BENCHMARKS=OFF",
+    });
+
+    const cmake_build = b.addSystemCommand(&.{
+        "cmake",
+        "--build", openfhe_build_dir,
+        "--parallel",
+    });
+    cmake_build.step.dependOn(&cmake_configure.step);
+
+    const openfhe_step = b.step("openfhe", "Build OpenFHE");
+    openfhe_step.dependOn(&cmake_build.step);
+
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -101,6 +123,52 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("pg", pg.module("pg"));
 
+    // Build C++ wrapper shared library using g++ (matching OpenFHE's build)
+    const compile_openfhe_c = b.addSystemCommand(&.{
+        "g++",
+        "-shared",
+        "-std=c++17",
+        "-fPIC",
+        "-O2",
+        "-I", "src",
+        "-I", "third-party/openfhe/src/core/include",
+        "-I", "third-party/openfhe/src/pke/include",
+        "-I", "third-party/openfhe/src/binfhe/include",
+        "-I", "third-party/openfhe/build/src/core",
+        "-I", "third-party/openfhe/third-party/cereal/include",
+        "-L", "third-party/openfhe/build/lib",
+        "-Wl,-rpath,third-party/openfhe/build/lib",
+        "-lOPENFHEcore",
+        "-lOPENFHEpke",
+        "-lOPENFHEbinfhe",
+        "src/openfhe_c.cpp",
+        "-o", "zig-out/lib/libopenfhe_c.so",
+    });
+    compile_openfhe_c.step.dependOn(&cmake_build.step);
+
+    // Create output directory
+    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", "zig-out/lib" });
+    compile_openfhe_c.step.dependOn(&mkdir_cmd.step);
+
+    // Add include path for the C header (for Zig's @cImport)
+    exe.root_module.addIncludePath(b.path("src"));
+
+    // Link the C wrapper shared library
+    exe.addLibraryPath(b.path("zig-out/lib"));
+    exe.linkSystemLibrary("openfhe_c");
+
+    // Link OpenFHE libraries
+    exe.addLibraryPath(b.path("third-party/openfhe/build/lib"));
+    exe.linkSystemLibrary("OPENFHEcore");
+    exe.linkSystemLibrary("OPENFHEpke");
+    exe.linkSystemLibrary("OPENFHEbinfhe");
+    exe.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+    exe.linkSystemLibrary("stdc++");
+    exe.linkSystemLibrary("gomp");
+
+    // Make exe build depend on C++ wrapper compilation
+    exe.step.dependOn(&compile_openfhe_c.step);
+
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
@@ -149,6 +217,19 @@ pub fn build(b: *std.Build) void {
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
+
+    // Add OpenFHE linking to tests (same as main executable)
+    exe_tests.root_module.addIncludePath(b.path("src")); // For openfhe_c.h
+    exe_tests.addLibraryPath(b.path("zig-out/lib"));
+    exe_tests.linkSystemLibrary("openfhe_c");
+    exe_tests.addLibraryPath(b.path("third-party/openfhe/build/lib"));
+    exe_tests.linkSystemLibrary("OPENFHEcore");
+    exe_tests.linkSystemLibrary("OPENFHEpke");
+    exe_tests.linkSystemLibrary("OPENFHEbinfhe");
+    exe_tests.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+    exe_tests.linkSystemLibrary("stdc++");
+    exe_tests.linkSystemLibrary("gomp");
+    exe_tests.step.dependOn(&compile_openfhe_c.step);
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);

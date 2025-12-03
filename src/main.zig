@@ -3,7 +3,7 @@ const httpz = @import("httpz");
 const pg = @import("pg");
 
 const server = @import("server.zig");
-const openfhe = @import("openfhe.zig");
+const openfhe = @import("openfhe");
 
 pub fn main() !void {
     // Test OpenFHE BGV wrapper

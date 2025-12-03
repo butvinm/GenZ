@@ -43,13 +43,47 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
-    // This creates a module, which represents a collection of source files alongside
-    // some compilation options, such as optimization mode and linked system libraries.
-    // Zig modules are the preferred way of making Zig code available to consumers.
-    // addModule defines a module that we intend to make available for importing
-    // to our consumers. We must give it a name because a Zig package can expose
-    // multiple modules and consumers will need to be able to specify which
-    // module they want to access.
+    // Build C++ wrapper shared library using g++ (matching OpenFHE's build)
+    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", "zig-out/lib" });
+    const compile_openfhe_c = b.addSystemCommand(&.{
+        "g++",
+        "-shared",
+        "-std=c++17",
+        "-fPIC",
+        "-O2",
+        "-I", "lib",
+        "-I", "third-party/openfhe/src/core/include",
+        "-I", "third-party/openfhe/src/pke/include",
+        "-I", "third-party/openfhe/src/binfhe/include",
+        "-I", "third-party/openfhe/build/src/core",
+        "-I", "third-party/openfhe/third-party/cereal/include",
+        "-L", "third-party/openfhe/build/lib",
+        "-Wl,-rpath,third-party/openfhe/build/lib",
+        "-lOPENFHEcore",
+        "-lOPENFHEpke",
+        "-lOPENFHEbinfhe",
+        "lib/openfhe_c.cpp",
+        "-o", "zig-out/lib/libopenfhe_c.so",
+    });
+    compile_openfhe_c.step.dependOn(&mkdir_cmd.step);
+    compile_openfhe_c.step.dependOn(&cmake_build.step);
+
+    // OpenFHE Zig bindings module
+    const openfhe_mod = b.addModule("openfhe", .{
+        .root_source_file = b.path("lib/openfhe.zig"),
+        .target = target,
+    });
+    openfhe_mod.addIncludePath(b.path("lib"));
+    openfhe_mod.addLibraryPath(b.path("zig-out/lib"));
+    openfhe_mod.addLibraryPath(b.path("third-party/openfhe/build/lib"));
+    openfhe_mod.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
+    openfhe_mod.linkSystemLibrary("openfhe_c", .{});
+    openfhe_mod.linkSystemLibrary("OPENFHEcore", .{});
+    openfhe_mod.linkSystemLibrary("OPENFHEpke", .{});
+    openfhe_mod.linkSystemLibrary("OPENFHEbinfhe", .{});
+    openfhe_mod.linkSystemLibrary("stdc++", .{});
+    openfhe_mod.linkSystemLibrary("gomp", .{});
+
     const mod = b.addModule("GenZ", .{
         // The root source file is the "entry point" of this module. Users of
         // this module will only be able to access public declarations contained
@@ -62,6 +96,7 @@ pub fn build(b: *std.Build) void {
         // which requires us to specify a target.
         .target = target,
     });
+    mod.addImport("openfhe", openfhe_mod);
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -122,51 +157,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe.root_module.addImport("pg", pg.module("pg"));
-
-    // Build C++ wrapper shared library using g++ (matching OpenFHE's build)
-    const compile_openfhe_c = b.addSystemCommand(&.{
-        "g++",
-        "-shared",
-        "-std=c++17",
-        "-fPIC",
-        "-O2",
-        "-I", "src",
-        "-I", "third-party/openfhe/src/core/include",
-        "-I", "third-party/openfhe/src/pke/include",
-        "-I", "third-party/openfhe/src/binfhe/include",
-        "-I", "third-party/openfhe/build/src/core",
-        "-I", "third-party/openfhe/third-party/cereal/include",
-        "-L", "third-party/openfhe/build/lib",
-        "-Wl,-rpath,third-party/openfhe/build/lib",
-        "-lOPENFHEcore",
-        "-lOPENFHEpke",
-        "-lOPENFHEbinfhe",
-        "src/openfhe_c.cpp",
-        "-o", "zig-out/lib/libopenfhe_c.so",
-    });
-    compile_openfhe_c.step.dependOn(&cmake_build.step);
-
-    // Create output directory
-    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", "zig-out/lib" });
-    compile_openfhe_c.step.dependOn(&mkdir_cmd.step);
-
-    // Add include path for the C header (for Zig's @cImport)
-    exe.root_module.addIncludePath(b.path("src"));
-
-    // Link the C wrapper shared library
-    exe.addLibraryPath(b.path("zig-out/lib"));
-    exe.linkSystemLibrary("openfhe_c");
-
-    // Link OpenFHE libraries
-    exe.addLibraryPath(b.path("third-party/openfhe/build/lib"));
-    exe.linkSystemLibrary("OPENFHEcore");
-    exe.linkSystemLibrary("OPENFHEpke");
-    exe.linkSystemLibrary("OPENFHEbinfhe");
-    exe.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
-    exe.linkSystemLibrary("stdc++");
-    exe.linkSystemLibrary("gomp");
-
-    // Make exe build depend on C++ wrapper compilation
+    exe.root_module.addImport("openfhe", openfhe_mod);
     exe.step.dependOn(&compile_openfhe_c.step);
 
     // This declares intent for the executable to be installed into the
@@ -207,18 +198,6 @@ pub fn build(b: *std.Build) void {
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
-
-    // Add OpenFHE linking to tests
-    mod_tests.root_module.addIncludePath(b.path("src")); // For openfhe_c.h
-    mod_tests.addLibraryPath(b.path("zig-out/lib"));
-    mod_tests.linkSystemLibrary("openfhe_c");
-    mod_tests.addLibraryPath(b.path("third-party/openfhe/build/lib"));
-    mod_tests.linkSystemLibrary("OPENFHEcore");
-    mod_tests.linkSystemLibrary("OPENFHEpke");
-    mod_tests.linkSystemLibrary("OPENFHEbinfhe");
-    mod_tests.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
-    mod_tests.linkSystemLibrary("stdc++");
-    mod_tests.linkSystemLibrary("gomp");
     mod_tests.step.dependOn(&compile_openfhe_c.step);
 
     // A run step that will run the test executable.

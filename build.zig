@@ -43,30 +43,34 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
-    // Build C++ wrapper shared library using g++ (matching OpenFHE's build)
-    const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", "zig-out/lib" });
-    const compile_openfhe_c = b.addSystemCommand(&.{
-        "g++",
-        "-shared",
-        "-std=c++17",
-        "-fPIC",
-        "-O2",
-        "-I", "lib",
-        "-I", "third-party/openfhe/src/core/include",
-        "-I", "third-party/openfhe/src/pke/include",
-        "-I", "third-party/openfhe/src/binfhe/include",
-        "-I", "third-party/openfhe/build/src/core",
-        "-I", "third-party/openfhe/third-party/cereal/include",
-        "-L", "third-party/openfhe/build/lib",
-        "-Wl,-rpath,third-party/openfhe/build/lib",
-        "-lOPENFHEcore",
-        "-lOPENFHEpke",
-        "-lOPENFHEbinfhe",
-        "lib/openfhe_c.cpp",
-        "-o", "zig-out/lib/libopenfhe_c.so",
+    // Build C++ wrapper as shared library (cached by Zig)
+    const openfhe_c_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
     });
-    compile_openfhe_c.step.dependOn(&mkdir_cmd.step);
-    compile_openfhe_c.step.dependOn(&cmake_build.step);
+    openfhe_c_mod.addCSourceFile(.{
+        .file = b.path("lib/openfhe_c.cpp"),
+        .flags = &.{"-std=c++17"},
+    });
+    openfhe_c_mod.addIncludePath(b.path("lib"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/core/include"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/pke/include"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/binfhe/include"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/build/src/core"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/third-party/cereal/include"));
+    openfhe_c_mod.addLibraryPath(b.path("third-party/openfhe/build/lib"));
+    openfhe_c_mod.linkSystemLibrary("OPENFHEcore", .{});
+    openfhe_c_mod.linkSystemLibrary("OPENFHEpke", .{});
+    openfhe_c_mod.linkSystemLibrary("OPENFHEbinfhe", .{});
+    openfhe_c_mod.linkSystemLibrary("c++", .{});
+
+    const openfhe_c = b.addLibrary(.{
+        .name = "openfhe_c",
+        .root_module = openfhe_c_mod,
+        .linkage = .dynamic,
+    });
+    openfhe_c.step.dependOn(&cmake_build.step);
+    b.installArtifact(openfhe_c);
 
     // OpenFHE Zig bindings module
     const openfhe_mod = b.addModule("openfhe", .{
@@ -74,15 +78,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     openfhe_mod.addIncludePath(b.path("lib"));
-    openfhe_mod.addLibraryPath(b.path("zig-out/lib"));
-    openfhe_mod.addLibraryPath(b.path("third-party/openfhe/build/lib"));
-    openfhe_mod.addLibraryPath(.{ .cwd_relative = "/usr/lib" });
-    openfhe_mod.linkSystemLibrary("openfhe_c", .{});
-    openfhe_mod.linkSystemLibrary("OPENFHEcore", .{});
-    openfhe_mod.linkSystemLibrary("OPENFHEpke", .{});
-    openfhe_mod.linkSystemLibrary("OPENFHEbinfhe", .{});
-    openfhe_mod.linkSystemLibrary("stdc++", .{});
-    openfhe_mod.linkSystemLibrary("gomp", .{});
+    openfhe_mod.linkLibrary(openfhe_c);  // Links and adds step dependency
 
     const mod = b.addModule("GenZ", .{
         // The root source file is the "entry point" of this module. Users of
@@ -158,7 +154,6 @@ pub fn build(b: *std.Build) void {
     });
     exe.root_module.addImport("pg", pg.module("pg"));
     exe.root_module.addImport("openfhe", openfhe_mod);
-    exe.step.dependOn(&compile_openfhe_c.step);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -198,7 +193,6 @@ pub fn build(b: *std.Build) void {
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
-    mod_tests.step.dependOn(&compile_openfhe_c.step);
 
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);

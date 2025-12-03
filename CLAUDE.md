@@ -8,7 +8,7 @@ GenZ is a toy DNA processing service with Homomorphic Encryption (FHE), written 
 
 ## Build Commands
 
-Requires Zig 0.15.1 or later and g++ for compiling the OpenFHE C++ wrapper.
+Requires Zig 0.15.1 or later.
 
 ```bash
 # Build the project (includes OpenFHE via CMake)
@@ -19,6 +19,9 @@ LD_LIBRARY_PATH=zig-out/lib:third-party/openfhe/build/lib zig build run -- --app
 
 # Run all tests
 zig build test
+
+# Force clean rebuild (delete cache)
+rm -rf .zig-cache && zig build
 ```
 
 ## Docker
@@ -59,27 +62,31 @@ Results are uploaded to GitHub Security tab (Code scanning alerts).
 
 ## Architecture
 
+### Source Files (src/)
 - **src/main.zig** - Application entry point, CLI argument parsing, OpenFHE initialization, database pool initialization
 - **src/server.zig** - HTTP server setup using httpz, route definitions, request handlers, database schema initialization
+- **src/root.zig** - Library module entry point, uses `std.testing.refAllDecls(@This())` for test discovery
 - **src/fhe.zig** - SimpleSomewhat homomorphic encryption implementation (toy, encrypt/decrypt single bits)
-- **src/openfhe.zig** - Zig bindings for OpenFHE BGV scheme (production FHE)
-- **src/openfhe_c.h** - C header for OpenFHE wrapper (opaque pointer types, extern "C" functions)
-- **src/openfhe_c.cpp** - C++ implementation wrapping OpenFHE library
-- **src/root.zig** - Library module entry point (currently empty)
+
+### OpenFHE Library (lib/)
+- **lib/openfhe.zig** - Zig bindings for OpenFHE BGV scheme (production FHE), exposed as named module "openfhe"
+- **lib/openfhe_c.h** - C header for OpenFHE wrapper (opaque pointer types, extern "C" functions)
+- **lib/openfhe_c.cpp** - C++ implementation wrapping OpenFHE library
 
 ## OpenFHE Integration
 
 OpenFHE is included as a git submodule at `third-party/openfhe`. The build system:
 1. Builds OpenFHE using CMake (first run takes several minutes)
-2. Compiles the C++ wrapper (`src/openfhe_c.cpp`) as a shared library using g++
-3. Links the Zig executable against the wrapper and OpenFHE libraries
+2. Compiles the C++ wrapper (`lib/openfhe_c.cpp`) as a shared library via `b.addLibrary()` (cached by Zig)
+3. Creates the "openfhe" Zig module linked to the C++ wrapper via `Module.linkLibrary()`
+4. Dependencies propagate automatically - no manual step ordering needed
 
 ### BGV Scheme API
 
 The wrapper exposes OpenFHE's BGV scheme for integer homomorphic encryption:
 
 ```zig
-const openfhe = @import("openfhe.zig");
+const openfhe = @import("openfhe");  // Named module, not file path
 
 // Create context
 var ctx = try openfhe.CryptoContext.createBgv(.{
@@ -124,7 +131,21 @@ All arguments are required:
 
 - `POST /api/v0.1.0/register` - Register a public key, returns a session UUID
 
-## Zig reference
+## Zig Build Patterns
+
+### Named Modules
+Libraries in `lib/` are exposed as named modules via `b.addModule()`. Import with `@import("module_name")` not file paths. This allows code outside `src/` to be imported cleanly.
+
+### Test Discovery
+Tests are discovered via `std.testing.refAllDecls(@This())` in `root.zig`. This recursively references all public declarations, including tests in imported modules. Only one test step (`mod_tests`) is needed.
+
+### Module Linking
+The C++ wrapper is built as a Zig library (`b.addLibrary`) and linked to `openfhe_mod` via `linkLibrary()`. This:
+- Enables build caching (skips 26s C++ compilation when unchanged)
+- Automatically propagates step dependencies to consumers
+- No manual `step.dependOn()` needed on exe/tests
+
+## Zig Reference
 
 - https://www.openmymind.net/learning_zig/
 - https://ziglang.org/documentation/0.15.2/

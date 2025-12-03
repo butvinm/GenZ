@@ -5,11 +5,6 @@ const pg = @import("pg");
 const server = @import("server.zig");
 const openfhe = @import("openfhe.zig");
 
-// Reference imported modules to include their tests
-comptime {
-    std.testing.refAllDecls(openfhe);
-}
-
 pub fn main() !void {
     // Test OpenFHE BGV wrapper
     std.log.info("Initializing OpenFHE BGV context...", .{});

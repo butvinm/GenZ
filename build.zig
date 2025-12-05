@@ -14,9 +14,12 @@ pub fn build(b: *std.Build) void {
         "cmake",
         "-S", "third-party/openfhe",
         "-B", openfhe_build_dir,
+        "-DCMAKE_CXX_COMPILER=clang++",
+        "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
         "-DBUILD_UNITTESTS=OFF",
         "-DBUILD_EXAMPLES=OFF",
         "-DBUILD_BENCHMARKS=OFF",
+        "-DGIT_SUBMOD_AUTO=OFF",
     });
 
     const cmake_build = b.addSystemCommand(&.{
@@ -50,7 +53,7 @@ pub fn build(b: *std.Build) void {
     });
     openfhe_c_mod.addCSourceFile(.{
         .file = b.path("lib/openfhe_c.cpp"),
-        .flags = &.{"-std=c++17"},
+        .flags = &.{ "-std=c++17", "-stdlib=libstdc++" },
     });
     openfhe_c_mod.addIncludePath(b.path("lib"));
     openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/core/include"));

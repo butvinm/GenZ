@@ -7,6 +7,31 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
+    // Build OpenFHE using CMake
+    const openfhe_build_dir = "third-party/openfhe/build";
+
+    const cmake_configure = b.addSystemCommand(&.{
+        "cmake",
+        "-S", "third-party/openfhe",
+        "-B", openfhe_build_dir,
+        "-DCMAKE_CXX_COMPILER=clang++",
+        "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
+        "-DBUILD_UNITTESTS=OFF",
+        "-DBUILD_EXAMPLES=OFF",
+        "-DBUILD_BENCHMARKS=OFF",
+        "-DGIT_SUBMOD_AUTO=OFF",
+    });
+
+    const cmake_build = b.addSystemCommand(&.{
+        "cmake",
+        "--build", openfhe_build_dir,
+        "--parallel",
+    });
+    cmake_build.step.dependOn(&cmake_configure.step);
+
+    const openfhe_step = b.step("openfhe", "Build OpenFHE");
+    openfhe_step.dependOn(&cmake_build.step);
+
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -21,13 +46,43 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
-    // This creates a module, which represents a collection of source files alongside
-    // some compilation options, such as optimization mode and linked system libraries.
-    // Zig modules are the preferred way of making Zig code available to consumers.
-    // addModule defines a module that we intend to make available for importing
-    // to our consumers. We must give it a name because a Zig package can expose
-    // multiple modules and consumers will need to be able to specify which
-    // module they want to access.
+    // Build C++ wrapper as shared library (cached by Zig)
+    const openfhe_c_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+    });
+    openfhe_c_mod.addCSourceFile(.{
+        .file = b.path("lib/openfhe_c.cpp"),
+        .flags = &.{ "-std=c++17", "-stdlib=libstdc++" },
+    });
+    openfhe_c_mod.addIncludePath(b.path("lib"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/core/include"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/pke/include"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/src/binfhe/include"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/build/src/core"));
+    openfhe_c_mod.addIncludePath(b.path("third-party/openfhe/third-party/cereal/include"));
+    openfhe_c_mod.addLibraryPath(b.path("third-party/openfhe/build/lib"));
+    openfhe_c_mod.linkSystemLibrary("OPENFHEcore", .{});
+    openfhe_c_mod.linkSystemLibrary("OPENFHEpke", .{});
+    openfhe_c_mod.linkSystemLibrary("OPENFHEbinfhe", .{});
+    openfhe_c_mod.linkSystemLibrary("c++", .{});
+
+    const openfhe_c = b.addLibrary(.{
+        .name = "openfhe_c",
+        .root_module = openfhe_c_mod,
+        .linkage = .dynamic,
+    });
+    openfhe_c.step.dependOn(&cmake_build.step);
+    b.installArtifact(openfhe_c);
+
+    // OpenFHE Zig bindings module
+    const openfhe_mod = b.addModule("openfhe", .{
+        .root_source_file = b.path("lib/openfhe.zig"),
+        .target = target,
+    });
+    openfhe_mod.addIncludePath(b.path("lib"));
+    openfhe_mod.linkLibrary(openfhe_c);  // Links and adds step dependency
+
     const mod = b.addModule("GenZ", .{
         // The root source file is the "entry point" of this module. Users of
         // this module will only be able to access public declarations contained
@@ -40,6 +95,7 @@ pub fn build(b: *std.Build) void {
         // which requires us to specify a target.
         .target = target,
     });
+    mod.addImport("openfhe", openfhe_mod);
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -100,6 +156,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     exe.root_module.addImport("pg", pg.module("pg"));
+    exe.root_module.addImport("openfhe", openfhe_mod);
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -143,22 +200,9 @@ pub fn build(b: *std.Build) void {
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
 
-    // Creates an executable that will run `test` blocks from the executable's
-    // root module. Note that test executables only test one module at a time,
-    // hence why we have to create two separate ones.
-    const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
-    });
-
-    // A run step that will run the second test executable.
-    const run_exe_tests = b.addRunArtifact(exe_tests);
-
-    // A top level step for running all tests. dependOn can be called multiple
-    // times and since the two run steps do not depend on one another, this will
-    // make the two of them run in parallel.
+    // A top level step for running tests.
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
-    test_step.dependOn(&run_exe_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //

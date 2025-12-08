@@ -131,6 +131,42 @@ All arguments are required:
 
 - `POST /api/v0.1.0/register` - Register a public key, returns a session UUID
 
+## Web UI
+
+Access the key registration UI at `https://localhost/`.
+
+**Directory**: `static/`
+- `index.html` - Main UI entry point
+- `css/style.css` - Styling
+- `js/main.js` - Application logic (ES6 module)
+- `js/openfhe-utils.js` - OpenFHE WASM utilities
+- `js/openfhe/` - OpenFHE WASM library (3.2MB total)
+
+**Static File Serving**: Nginx serves files from `static/` mounted to `/usr/share/nginx/html`
+
+**BGV Parameters** (must match backend main.zig:11-14):
+- Multiplicative depth: 2
+- Plaintext modulus: 65537
+- Security level: 128-bit
+
+**Workflow**:
+1. User clicks "Generate & Register Key"
+2. WASM loads OpenFHE library (~3MB, cached after first load)
+3. BGV context created, key pair generated
+4. Public key serialized to base64 binary
+5. POST to /api/v0.1.0/register
+6. Session UUID displayed
+
+**Testing**:
+```bash
+# Access UI
+open https://localhost/
+
+# Verify database after registration
+docker exec -it genz-db-1 psql -U postgres -d genz_db \
+  -c "SELECT session_id, length(public_key), issued_at FROM keys ORDER BY issued_at DESC LIMIT 1;"
+```
+
 ## Zig Build Patterns
 
 ### Named Modules

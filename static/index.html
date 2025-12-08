@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self';">
+    <title>GenZ DNA Processing - Key Registration</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GenZ DNA Processing</h1>
+            <p>Homomorphic Encryption Key Registration</p>
+        </header>
+
+        <main id="app">
+            <div id="status" class="status"></div>
+
+            <div class="card">
+                <h2>BGV Key Generation</h2>
+                <p>Generate a BGV homomorphic encryption key pair and register your public key with the service.</p>
+
+                <button id="generateBtn" class="btn-primary">
+                    Generate & Register Key
+                </button>
+
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p id="loadingText">Initializing OpenFHE...</p>
+                </div>
+            </div>
+
+            <div id="result" class="card hidden">
+                <h3>Registration Successful</h3>
+                <p><strong>Session ID:</strong> <code id="sessionId"></code></p>
+                <p class="info">Save this session ID for future DNA processing requests.</p>
+            </div>
+
+            <div id="error" class="card error hidden">
+                <h3>Error</h3>
+                <p id="errorMessage"></p>
+            </div>
+
+            <details class="details">
+                <summary>Technical Details</summary>
+                <div id="techDetails">
+                    <p><strong>Scheme:</strong> BGV (Brakerski-Gentry-Vaikuntanathan)</p>
+                    <p><strong>Multiplicative Depth:</strong> 2</p>
+                    <p><strong>Plaintext Modulus:</strong> 65537</p>
+                    <p><strong>Security Level:</strong> 128-bit (HEStd_128_classic)</p>
+                </div>
+            </details>
+        </main>
+
+        <footer>
+            <p>Powered by <a href="https://www.openfhe.org/" target="_blank">OpenFHE</a></p>
+        </footer>
+    </div>
+
+    <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

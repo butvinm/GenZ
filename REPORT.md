@@ -177,7 +177,7 @@ flowchart LR
 
 **Потенциальные угрозы:**
 
-- Отсутствие HSTS заголовка → возможна downgrade атака
+- SSL-stripping и downgrade атаки
 
 ## Нормативная база
 
@@ -298,9 +298,11 @@ graph LR
 
     %% Ветвь 5
     Root --> WebApp[Веб-приложение]
+    WebApp --> HSTS[HTTP Strict Transport Security]
     WebApp --> CSP
     WebApp --> X-Content-Type-Options
     WebApp --> X-XSS-Protection
+    WebApp --> X-Frame-Options
 
     %% Ветвь 6
     Root --> Container[Безопасность контейнеров]
@@ -383,6 +385,10 @@ StackHawk - это инструмент DAST, он проверяет запущ
 
 Безопасность на стороне клиента (браузера) обеспечивается передачей специальных HTTP-заголовков ответа, минимизирующих векторы атак.
 
+- **HTTP Strict Transport Security (HSTS):** Заголовок `Strict-Transport-Security` настроен с `max-age=31536000` (1 год) и `includeSubDomains`.
+  - Принудительно переводит браузер на HTTPS для всех последующих запросов к домену.
+  - Предотвращает SSL-stripping атаки и downgrade-атаки, когда злоумышленник пытается перенаправить пользователя на незащищенный HTTP-канал.
+  - Директива `includeSubDomains` распространяет защиту на все поддомены.
 - **Content-Security-Policy (CSP):** Определяет список доверенных источников для загрузки скриптов, стилей и изображений.
   - Эффективно блокирует XSS-атаки и инъекции вредоносного кода.
 - **X-Content-Type-Options:** Установлен в значение `nosniff`.

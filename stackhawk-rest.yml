@@ -7,14 +7,10 @@ app:
     waitTimeoutMillis: 60000
     pollDelay: 2000
   scanPolicy:
-    name: OPEN_API_EXPERIMENTAL
+    name: REST
 
 hawk:
   spider:
     base: true
     ajax: true
     maxDuration: 5
-  # Discover API endpoints through spidering
-  # Note: For better coverage, add an OpenAPI spec:
-  # openApiConf:
-  #   path: /path/to/openapi.yml

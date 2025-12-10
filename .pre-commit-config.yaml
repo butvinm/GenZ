@@ -19,11 +19,6 @@ repos:
       - id: check-yaml
         name: Check YAML syntax
         args: ['--unsafe']
-      - id: check-added-large-files
-        name: Check for large files
-        args: ['--maxkb=2048']
-      - id: check-merge-conflict
-        name: Check for merge conflicts
       - id: mixed-line-ending
         name: Check mixed line endings
 

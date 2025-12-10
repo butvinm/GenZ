@@ -8,6 +8,8 @@ app:
     pollDelay: 2000
   scanPolicy:
     name: REST
+    includePluginIds:
+      - "40052"
 
 hawk:
   spider:

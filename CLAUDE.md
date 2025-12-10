@@ -58,8 +58,9 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 - **checkov** - IaC scanner for Dockerfile and GitHub Actions misconfigurations
 - **trivy-config** - Scans Dockerfile, docker-compose.yml, nginx config for misconfigurations
 - **trivy-images** - Scans Docker images (genz, nginx:alpine, postgres:18) for vulnerabilities
+- **stackhawk** - Scans running application for security vulnerabilities using dynamic analysis (DAST)
 
-Results are uploaded to GitHub Security tab (Code scanning alerts).
+Results are uploaded to GitHub Security tab (Code scanning alerts) and StackHawk dashboard.
 
 ## Pre-commit Hooks
 
@@ -119,6 +120,39 @@ git commit --no-verify  # DON'T DO THIS!
 **Hook installation fails**:
 - Ensure pre-commit is installed: `pre-commit --version`
 - Re-run: `pre-commit install --install-hooks --overwrite`
+
+## StackHawk DAST Scanning
+
+Dynamic application security testing with StackHawk scans the running application for vulnerabilities.
+
+### Local Scanning
+
+```bash
+# Ensure services are running
+docker-compose up -d
+
+# Run scan (requires hawk CLI and HAWK_API_KEY in .env)
+hawk --api-key=$HAWK_API_KEY scan
+
+# View results
+# Visit https://app.stackhawk.com/applications
+```
+
+### Configuration
+
+- `stackhawk.yml` - Scan configuration (application ID, target host, spider settings)
+- `HAWK_API_KEY` - API key (set in `.env` locally, GitHub secrets for CI)
+- Application ID: `889ee6e3-984f-4651-8e97-8bb68d3470a3`
+
+### CI Integration
+
+StackHawk runs automatically in GitHub Actions on every push to master and PR. The scan:
+1. Starts all services (nginx, app, postgres) with SSL certificates
+2. Waits for application to become healthy
+3. Runs DAST scan against `https://localhost:443`
+4. Uploads results to StackHawk platform
+
+View scan results at https://app.stackhawk.com/scans
 
 ## Architecture
 

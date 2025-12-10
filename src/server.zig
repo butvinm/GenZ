@@ -49,9 +49,16 @@ pub fn initServer(alloc: std.mem.Allocator, app: *App) !httpz.Server(*App) {
     }, app);
 
     var router = try server.router(.{});
+    router.get("/health", health, .{});
     router.post("/api/v0.1.0/register", register, .{});
 
     return server;
+}
+
+/// Health check endpoint
+fn health(_: *App, _: *httpz.Request, res: *httpz.Response) !void {
+    res.status = 200;
+    try res.json(.{ .status = "healthy" }, .{});
 }
 
 const RegisterRequest = struct {

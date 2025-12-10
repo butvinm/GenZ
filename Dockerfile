@@ -40,6 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libc++1=1:14.0-55.7~deb12u1 \
     libc++abi1=1:14.0-55.7~deb12u1 \
     libomp5=1:14.0-55.7~deb12u1 \
+    curl=7.88.1-10+deb12u14 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -u 1000 -m appuser

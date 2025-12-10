@@ -3,9 +3,11 @@ app:
   env: Development
   host: https://localhost:443
   waitForAppTarget:
-    path: /
+    path: /health
     waitTimeoutMillis: 60000
     pollDelay: 2000
+  scanPolicy:
+    name: OWASP
 
 hawk:
   spider:

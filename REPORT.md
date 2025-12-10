@@ -337,6 +337,12 @@ graph LR
 
 ![Результаты сканирования Trivy и Checkov](assets/github-security-results.png)
 
+**Пример уязвимости в пакете zlib, найденной Trivy:**
+
+![Пример уязвимости](assets/trivy-alert.png)
+
+> False-positive: библиотека MiniZip официально удалена из Debian
+
 **Результаты сканирования StackHawk:**
 
 StackHawk - это инструмент DAST, он проверяет запущенное приложение - API, веб-интерфейс - на наличие уязвимостей.

@@ -59,6 +59,8 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 - **trivy-config** - Scans Dockerfile, docker-compose.yml, nginx config for misconfigurations
 - **trivy-images** - Scans Docker images (genz, nginx:alpine, postgres:18) for vulnerabilities
 - **stackhawk** - Scans running application for security vulnerabilities using dynamic analysis (DAST)
+  - OWASP scan with DEFAULT_API policy (all plugins, comprehensive web security)
+  - REST API scan with OPEN_API_EXPERIMENTAL policy (all plugins, comprehensive API security)
 
 Results are uploaded to GitHub Security tab (Code scanning alerts) and StackHawk dashboard.
 
@@ -131,7 +133,13 @@ Dynamic application security testing with StackHawk scans the running applicatio
 # Ensure services are running
 docker-compose up -d
 
-# Run scan (requires hawk CLI and HAWK_API_KEY in .env)
+# Run OWASP scan
+hawk --api-key=$HAWK_API_KEY scan stackhawk-owasp.yml
+
+# Run REST API scan
+hawk --api-key=$HAWK_API_KEY scan stackhawk-rest.yml
+
+# Run original scan
 hawk --api-key=$HAWK_API_KEY scan
 
 # View results
@@ -140,17 +148,32 @@ hawk --api-key=$HAWK_API_KEY scan
 
 ### Configuration
 
-- `stackhawk.yml` - Scan configuration (application ID, target host, spider settings)
+Two separate scan configurations target different security policies:
+
+- **`stackhawk-owasp.yml`** - DEFAULT_API policy with all plugins enabled
+  - Comprehensive OWASP Top 10 and web security testing
+  - Best for: General web application security scanning
+
+- **`stackhawk-rest.yml`** - OPEN_API_EXPERIMENTAL policy with all plugins enabled
+  - Comprehensive REST API security testing
+  - Best for: API-specific vulnerability scanning
+  - Note: For better coverage, add an OpenAPI spec to this config
+
+- **`stackhawk.yml`** - Legacy custom policy (GENZ_POLICY)
+
 - `HAWK_API_KEY` - API key (set in `.env` locally, GitHub secrets for CI)
 - Application ID: `889ee6e3-984f-4651-8e97-8bb68d3470a3`
 
 ### CI Integration
 
-StackHawk runs automatically in GitHub Actions on every push to master and PR. The scan:
+StackHawk runs automatically in GitHub Actions on every push to master and PR. The workflow:
 1. Starts all services (nginx, app, postgres) with SSL certificates
 2. Waits for application to become healthy
-3. Runs DAST scan against `https://localhost:443`
-4. Uploads results to StackHawk platform
+3. Runs OWASP scan against `https://localhost:443`
+4. Runs REST API scan against `https://localhost:443`
+5. Uploads results to StackHawk platform
+
+Both scans run sequentially in the same CI job to ensure comprehensive coverage.
 
 View scan results at https://app.stackhawk.com/scans
 

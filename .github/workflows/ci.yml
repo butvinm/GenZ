@@ -198,7 +198,7 @@ jobs:
           category: trivy-postgres
 
   stackhawk:
-    name: StackHawk DAST Scan
+    name: StackHawk DAST Scans (OWASP + REST API)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -232,10 +232,17 @@ jobs:
         run: |
           timeout 60 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 2; done'
 
-      - name: Run StackHawk scan
+      - name: Run StackHawk OWASP scan
         uses: stackhawk/hawkscan-action@v2
         with:
           apiKey: ${{ secrets.HAWK_API_KEY }}
+          configFile: stackhawk-owasp.yml
+
+      - name: Run StackHawk REST API scan
+        uses: stackhawk/hawkscan-action@v2
+        with:
+          apiKey: ${{ secrets.HAWK_API_KEY }}
+          configFile: stackhawk-rest.yml
 
       - name: Stop services
         if: always()

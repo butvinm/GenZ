@@ -1,0 +1,62 @@
+# Gitleaks configuration for GenZ
+# See https://github.com/gitleaks/gitleaks for documentation
+
+title = "GenZ Gitleaks Configuration"
+
+# Extend default gitleaks rules
+[extend]
+useDefault = true
+
+# Custom allowlist for false positives
+[allowlist]
+description = "Allowlisted files and patterns"
+
+# Allow test fixtures and examples
+paths = [
+    '''\.env\.example$''',
+    '''\.env\.template$''',
+    '''test/fixtures/''',
+    '''scripts/generate-certs\.sh''',
+]
+
+# Allow specific patterns that are false positives
+regexes = [
+    # Example connection strings in documentation
+    '''postgres://postgres:postgres@localhost:5432/genz_db''',
+    # Placeholder API keys in docs
+    '''your_api_key_here''',
+    '''YOUR_.*_KEY''',
+    # Self-signed certificate common names
+    '''/CN=localhost''',
+]
+
+# Stopwords to ignore (common false positives)
+stopwords = [
+    "example",
+    "sample",
+    "test",
+    "dummy",
+    "placeholder",
+]
+
+# Custom rules specific to GenZ
+[[rules]]
+id = "hawk-api-key"
+description = "Hawk API Key"
+regex = '''hawk\.[A-Za-z0-9]{16,}\.[A-Za-z0-9]{16,}'''
+tags = ["key", "API", "hawk"]
+keywords = [
+    "hawk",
+]
+
+[[rules]]
+id = "openfhe-private-key"
+description = "OpenFHE serialized private key"
+regex = '''-----BEGIN OPENFHE PRIVATE KEY-----'''
+tags = ["key", "FHE", "private"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "PostgreSQL connection string with credentials"
+regex = '''postgres://[^:]+:[^@]+@[^/]+/'''
+tags = ["database", "credentials"]

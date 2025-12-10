@@ -60,6 +60,66 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 
 Results are uploaded to GitHub Security tab (Code scanning alerts).
 
+## Pre-commit Hooks
+
+Local git hooks prevent secrets from being committed to version control.
+
+### Setup
+
+```bash
+# Install pre-commit framework
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+```
+
+### Configuration
+
+- `.pre-commit-config.yaml` - Hook definitions and versions
+- `.gitleaks.toml` - Gitleaks custom rules and allowlists
+
+### Hooks Enabled
+
+1. **Gitleaks** - Scans commits for secrets (API keys, passwords, tokens)
+2. **Trailing whitespace** - Removes trailing spaces
+3. **End of file fixer** - Ensures files end with newline
+4. **YAML checker** - Validates YAML syntax
+5. **Large file checker** - Prevents committing files > 2MB (except BGV keys)
+6. **Merge conflict checker** - Detects unresolved conflicts
+7. **Hadolint** - Lints Dockerfiles
+
+### Running Manually
+
+```bash
+# Run on staged files (what pre-commit does automatically)
+pre-commit run
+
+# Run on all files
+pre-commit run --all-files
+
+# Run specific hook
+pre-commit run gitleaks --all-files
+
+# Bypass hooks (NOT RECOMMENDED - security risk!)
+git commit --no-verify  # DON'T DO THIS!
+```
+
+### Troubleshooting
+
+**Hook fails on .env file**:
+- Verify `.env` is in `.gitignore`
+- Check if `.env` is tracked: `git ls-files | grep .env`
+- If tracked, remove: `git rm --cached .env`
+
+**False positives**:
+- Add patterns to `.gitleaks.toml` allowlist
+- Never bypass hooks for convenience
+
+**Hook installation fails**:
+- Ensure pre-commit is installed: `pre-commit --version`
+- Re-run: `pre-commit install --install-hooks --overwrite`
+
 ## Architecture
 
 ### Source Files (src/)

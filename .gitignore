@@ -3,3 +3,11 @@
 zig-out/
 certs/*.crt
 certs/*.key
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Backup files
+*.backup

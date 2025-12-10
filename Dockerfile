@@ -2,7 +2,16 @@
 FROM debian:bookworm-slim AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl xz-utils cmake make clang libc++-dev libc++abi-dev libomp-dev git ca-certificates \
+    curl=7.88.1-10+deb12u14 \
+    xz-utils=5.4.1-1 \
+    cmake=3.25.1-1 \
+    make=4.3-4.1 \
+    clang=1:14.0-55.7~deb12u1 \
+    libc++-dev=1:14.0-55.7~deb12u1 \
+    libc++abi-dev=1:14.0-55.7~deb12u1 \
+    libomp-dev=1:14.0-55.7~deb12u1 \
+    git=1:2.39.5-0+deb12u2 \
+    ca-certificates=20230311+deb12u1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -L https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz -o zig.tar.xz && \
@@ -27,7 +36,10 @@ RUN zig build
 # Final image
 FROM debian:bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends libc++1 libc++abi1 libomp5 \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libc++1=1:14.0-55.7~deb12u1 \
+    libc++abi1=1:14.0-55.7~deb12u1 \
+    libomp5=1:14.0-55.7~deb12u1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -u 1000 -m appuser

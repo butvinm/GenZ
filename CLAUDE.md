@@ -54,6 +54,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 
 - **build** - Builds Docker image
 - **gitleaks** - Scans git history and source code for leaked secrets
+- **hadolint** - Lints Dockerfile for best practices (pinned package versions, layer optimization)
 - **checkov** - IaC scanner for Dockerfile and GitHub Actions misconfigurations
 - **trivy-config** - Scans Dockerfile, docker-compose.yml, nginx config for misconfigurations
 - **trivy-images** - Scans Docker images (genz, nginx:alpine, postgres:18) for vulnerabilities
@@ -85,9 +86,8 @@ pre-commit install
 2. **Trailing whitespace** - Removes trailing spaces
 3. **End of file fixer** - Ensures files end with newline
 4. **YAML checker** - Validates YAML syntax
-5. **Large file checker** - Prevents committing files > 2MB (except BGV keys)
-6. **Merge conflict checker** - Detects unresolved conflicts
-7. **Hadolint** - Lints Dockerfiles
+5. **Mixed line endings** - Checks for Windows vs Unix line endings
+6. **Hadolint** - Lints Dockerfiles for best practices
 
 ### Running Manually
 

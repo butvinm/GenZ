@@ -59,8 +59,8 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 - **trivy-config** - Scans Dockerfile, docker-compose.yml, nginx config for misconfigurations
 - **trivy-images** - Scans Docker images (genz, nginx:alpine, postgres:18) for vulnerabilities
 - **stackhawk** - Scans running application for security vulnerabilities using dynamic analysis (DAST)
-  - OWASP scan with DEFAULT_API policy (all plugins, comprehensive web security)
-  - REST API scan with OPEN_API_EXPERIMENTAL policy (all plugins, comprehensive API security)
+  - OWASP scan (comprehensive web security)
+  - REST API scan (comprehensive API security)
 
 Results are uploaded to GitHub Security tab (Code scanning alerts) and StackHawk dashboard.
 
@@ -139,9 +139,6 @@ hawk --api-key=$HAWK_API_KEY scan stackhawk-owasp.yml
 # Run REST API scan
 hawk --api-key=$HAWK_API_KEY scan stackhawk-rest.yml
 
-# Run original scan
-hawk --api-key=$HAWK_API_KEY scan
-
 # View results
 # Visit https://app.stackhawk.com/applications
 ```
@@ -150,16 +147,14 @@ hawk --api-key=$HAWK_API_KEY scan
 
 Two separate scan configurations target different security policies:
 
-- **`stackhawk-owasp.yml`** - DEFAULT_API policy with all plugins enabled
+- **`stackhawk-owasp.yml`** - OWASP policy
   - Comprehensive OWASP Top 10 and web security testing
   - Best for: General web application security scanning
 
-- **`stackhawk-rest.yml`** - OPEN_API_EXPERIMENTAL policy with all plugins enabled
+- **`stackhawk-rest.yml`** - REST policy
   - Comprehensive REST API security testing
   - Best for: API-specific vulnerability scanning
   - Note: For better coverage, add an OpenAPI spec to this config
-
-- **`stackhawk.yml`** - Legacy custom policy (GENZ_POLICY)
 
 - `HAWK_API_KEY` - API key (set in `.env` locally, GitHub secrets for CI)
 - Application ID: `889ee6e3-984f-4651-8e97-8bb68d3470a3`
@@ -246,6 +241,7 @@ All arguments are required:
 
 ## API Endpoints
 
+- `GET /health` - Health check endpoint, returns `{"status":"healthy"}`
 - `POST /api/v0.1.0/register` - Register a public key, returns a session UUID
 
 ## Web UI

@@ -196,3 +196,36 @@ jobs:
         with:
           sarif_file: trivy-postgres-results.sarif
           category: trivy-postgres
+
+  stackhawk:
+    name: StackHawk DAST Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Generate SSL certificates
+        run: ./scripts/generate-certs.sh
+
+      - name: Start services
+        run: |
+          docker-compose up -d
+          docker-compose ps
+
+      - name: Wait for services to be healthy
+        run: |
+          timeout 60 bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 2; done'
+
+      - name: Run StackHawk scan
+        uses: stackhawk/hawkscan-action@v2
+        with:
+          apiKey: ${{ secrets.HAWK_API_KEY }}
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down

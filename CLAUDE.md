@@ -61,8 +61,7 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 - **stackhawk** - Scans running application for security vulnerabilities using dynamic analysis (DAST)
   - OWASP scan (comprehensive web security)
   - REST API scan (comprehensive API security)
-
-Results are uploaded to GitHub Security tab (Code scanning alerts) and StackHawk dashboard.
+  - Results uploaded to GitHub Code Scanning and StackHawk dashboard
 
 ## Pre-commit Hooks
 
@@ -166,11 +165,13 @@ StackHawk runs automatically in GitHub Actions on every push to master and PR. T
 2. Waits for application to become healthy
 3. Runs OWASP scan against `https://localhost:443`
 4. Runs REST API scan against `https://localhost:443`
-5. Uploads results to StackHawk platform
+5. Uploads results to both StackHawk platform and GitHub Code Scanning
 
 Both scans run sequentially in the same CI job to ensure comprehensive coverage.
 
-View scan results at https://app.stackhawk.com/scans
+View scan results:
+- StackHawk dashboard: https://app.stackhawk.com/scans
+- GitHub Security tab: Repository → Security → Code scanning alerts
 
 ## Architecture
 

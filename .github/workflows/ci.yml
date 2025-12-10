@@ -238,12 +238,16 @@ jobs:
         with:
           apiKey: ${{ secrets.HAWK_API_KEY }}
           configurationFiles: stackhawk-owasp.yml
+          codeScanningAlerts: true
+          githubToken: ${{ github.token }}
 
       - name: Run StackHawk REST API scan
         uses: stackhawk/hawkscan-action@v2
         with:
           apiKey: ${{ secrets.HAWK_API_KEY }}
           configurationFiles: stackhawk-rest.yml
+          codeScanningAlerts: true
+          githubToken: ${{ github.token }}
 
       - name: Stop services
         if: always()

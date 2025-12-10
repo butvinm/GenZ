@@ -214,12 +214,12 @@ jobs:
 
       - name: Start services
         run: |
-          docker-compose up -d
-          docker-compose ps
+          docker compose up -d
+          docker compose ps
 
       - name: Wait for services to be healthy
         run: |
-          timeout 60 bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 2; done'
+          timeout 60 bash -c 'until docker compose ps | grep -q "healthy"; do sleep 2; done'
 
       - name: Run StackHawk scan
         uses: stackhawk/hawkscan-action@v2
@@ -228,4 +228,4 @@ jobs:
 
       - name: Stop services
         if: always()
-        run: docker-compose down
+        run: docker compose down

@@ -42,7 +42,11 @@ pub const App = struct {
 };
 
 pub fn initServer(alloc: std.mem.Allocator, app: *App) !httpz.Server(*App) {
-    var server = try httpz.Server(*App).init(alloc, .{ .address = app.config.appHost, .port = app.config.appPort }, app);
+    var server = try httpz.Server(*App).init(alloc, .{
+        .address = app.config.appHost,
+        .port = app.config.appPort,
+        .request = .{ .max_body_size = 10485760 },
+    }, app);
 
     var router = try server.router(.{});
     router.post("/api/v0.1.0/register", register, .{});

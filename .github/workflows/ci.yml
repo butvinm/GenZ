@@ -236,13 +236,13 @@ jobs:
         uses: stackhawk/hawkscan-action@v2
         with:
           apiKey: ${{ secrets.HAWK_API_KEY }}
-          configFile: stackhawk-owasp.yml
+          configurationFiles: stackhawk-owasp.yml
 
       - name: Run StackHawk REST API scan
         uses: stackhawk/hawkscan-action@v2
         with:
           apiKey: ${{ secrets.HAWK_API_KEY }}
-          configFile: stackhawk-rest.yml
+          configurationFiles: stackhawk-rest.yml
 
       - name: Stop services
         if: always()

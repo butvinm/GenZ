@@ -212,6 +212,17 @@ jobs:
       - name: Generate SSL certificates
         run: ./scripts/generate-certs.sh
 
+      - name: Create .env file for CI
+        run: |
+          cat > .env << 'EOF'
+          HTTPS_PORT=443
+          DB_PORT=5432
+          DB_HOST=db
+          DB_USER=postgres
+          DB_PASSWORD=postgres
+          DB_DATABASE=genz_db
+          EOF
+
       - name: Start services
         run: |
           docker compose up -d

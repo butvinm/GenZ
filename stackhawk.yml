@@ -6,6 +6,11 @@ app:
     path: /
     waitTimeoutMillis: 60000
     pollDelay: 2000
+  scanPolicy:
+    name: GENZ_POLICY
+    includePluginIds:
+      # API Lack of Rate Limiting
+      - "40052"
 
 hawk:
   spider:

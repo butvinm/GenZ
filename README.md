@@ -3,6 +3,20 @@
 
 # Toy implementation of DNA processing service with Homomorphic Encryption
 
+## Prerequisites
+
+- Zig 0.15.1 or later
+- Docker and Docker Compose
+- OpenSSL (for certificate generation)
+- Python 3.7+ with pre-commit: `pip install pre-commit`
+
+Install pre-commit hooks:
+```bash
+pre-commit install
+```
+
+(Detailed pre-commit documentation in CLAUDE.md)
+
 ## Deployment
 
 ### Prerequisites

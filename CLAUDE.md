@@ -54,11 +54,105 @@ GitHub Actions workflow (`.github/workflows/ci.yml`) runs on pushes to master an
 
 - **build** - Builds Docker image
 - **gitleaks** - Scans git history and source code for leaked secrets
+- **hadolint** - Lints Dockerfile for best practices (pinned package versions, layer optimization)
 - **checkov** - IaC scanner for Dockerfile and GitHub Actions misconfigurations
 - **trivy-config** - Scans Dockerfile, docker-compose.yml, nginx config for misconfigurations
 - **trivy-images** - Scans Docker images (genz, nginx:alpine, postgres:18) for vulnerabilities
+- **stackhawk** - Scans running application for security vulnerabilities using dynamic analysis (DAST)
 
-Results are uploaded to GitHub Security tab (Code scanning alerts).
+Results are uploaded to GitHub Security tab (Code scanning alerts) and StackHawk dashboard.
+
+## Pre-commit Hooks
+
+Local git hooks prevent secrets from being committed to version control.
+
+### Setup
+
+```bash
+# Install pre-commit framework
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+```
+
+### Configuration
+
+- `.pre-commit-config.yaml` - Hook definitions and versions
+- `.gitleaks.toml` - Gitleaks custom rules and allowlists
+
+### Hooks Enabled
+
+1. **Gitleaks** - Scans commits for secrets (API keys, passwords, tokens)
+2. **Trailing whitespace** - Removes trailing spaces
+3. **End of file fixer** - Ensures files end with newline
+4. **YAML checker** - Validates YAML syntax
+5. **Mixed line endings** - Checks for Windows vs Unix line endings
+6. **Hadolint** - Lints Dockerfiles for best practices
+
+### Running Manually
+
+```bash
+# Run on staged files (what pre-commit does automatically)
+pre-commit run
+
+# Run on all files
+pre-commit run --all-files
+
+# Run specific hook
+pre-commit run gitleaks --all-files
+
+# Bypass hooks (NOT RECOMMENDED - security risk!)
+git commit --no-verify  # DON'T DO THIS!
+```
+
+### Troubleshooting
+
+**Hook fails on .env file**:
+- Verify `.env` is in `.gitignore`
+- Check if `.env` is tracked: `git ls-files | grep .env`
+- If tracked, remove: `git rm --cached .env`
+
+**False positives**:
+- Add patterns to `.gitleaks.toml` allowlist
+- Never bypass hooks for convenience
+
+**Hook installation fails**:
+- Ensure pre-commit is installed: `pre-commit --version`
+- Re-run: `pre-commit install --install-hooks --overwrite`
+
+## StackHawk DAST Scanning
+
+Dynamic application security testing with StackHawk scans the running application for vulnerabilities.
+
+### Local Scanning
+
+```bash
+# Ensure services are running
+docker-compose up -d
+
+# Run scan (requires hawk CLI and HAWK_API_KEY in .env)
+hawk --api-key=$HAWK_API_KEY scan
+
+# View results
+# Visit https://app.stackhawk.com/applications
+```
+
+### Configuration
+
+- `stackhawk.yml` - Scan configuration (application ID, target host, spider settings)
+- `HAWK_API_KEY` - API key (set in `.env` locally, GitHub secrets for CI)
+- Application ID: `889ee6e3-984f-4651-8e97-8bb68d3470a3`
+
+### CI Integration
+
+StackHawk runs automatically in GitHub Actions on every push to master and PR. The scan:
+1. Starts all services (nginx, app, postgres) with SSL certificates
+2. Waits for application to become healthy
+3. Runs DAST scan against `https://localhost:443`
+4. Uploads results to StackHawk platform
+
+View scan results at https://app.stackhawk.com/scans
 
 ## Architecture
 

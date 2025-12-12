@@ -2,6 +2,7 @@ const std = @import("std");
 const httpz = @import("httpz");
 const pg = @import("pg");
 
+const db = @import("db.zig");
 const server = @import("server.zig");
 const openfhe = @import("openfhe");
 
@@ -33,17 +34,18 @@ pub fn main() !void {
         },
     };
 
-    var db = try pg.Pool.init(allocator, .{
+    var pool = try pg.Pool.init(allocator, .{
         .connect = .{ .port = config.dbPort, .host = config.dbHost },
         .auth = .{ .username = config.dbUser, .database = config.dbDatabase, .password = config.dbPassword },
     });
-    defer db.deinit();
+    defer pool.deinit();
+
+    var appDb = db.DB{ .pool = pool };
 
     var app = server.App{
-        .db = db,
+        .db = &appDb,
         .config = config,
     };
-    try server.initDb(&app);
 
     var appServer = try server.initServer(allocator, &app);
     defer {
@@ -51,7 +53,10 @@ pub fn main() !void {
         appServer.deinit();
     }
 
-    std.log.info("Server is listening on http://{s}:{}\n", .{ config.appHost, config.appPort });
+    std.log.info("Running database migration", .{});
+    try appDb.migrate();
+
+    std.log.info("Server is listening on http://{s}:{}", .{ config.appHost, config.appPort });
     try appServer.listen();
 }
 

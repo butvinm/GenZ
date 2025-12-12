@@ -43,7 +43,7 @@ pub fn main() !void {
         .db = db,
         .config = config,
     };
-    try app.initDb();
+    try server.initDb(&app);
 
     var appServer = try server.initServer(allocator, &app);
     defer {

@@ -35,13 +35,13 @@ pub fn initServer(alloc: std.mem.Allocator, app: *App) !httpz.Server(*App) {
     var router = try server.router(.{});
     router.get("/health", health, .{});
     router.post("/api/v0.1.0/register", register, .{});
+    router.post("/api/v0.1.0/getCryptoContext", getCryptoContext, .{});
 
     return server;
 }
 
 /// Health check endpoint
 fn health(_: *App, _: *httpz.Request, res: *httpz.Response) !void {
-    res.status = 200;
     try res.json(.{ .status = "healthy" }, .{});
 }
 
@@ -69,6 +69,32 @@ fn register(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
     try app.db.saveSession(sessionId, issuedAt);
 
     const response = RegisterResponse{ .sessionId = uuid.urn.serialize(sessionId) };
+    try res.json(response, .{});
+}
+
+/// Create a crypto context
+const GetCryptoContextResponse = struct {
+    cryptoContext: []const u8,
+};
+
+fn getCryptoContext(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
+    const sessionIdHeader = req.headers.get("x-session-id") orelse {
+        res.setStatus(std.http.Status.unauthorized);
+        return;
+    };
+    const sessionId = uuid.urn.deserialize(sessionIdHeader) catch {
+        res.setStatus(std.http.Status.bad_request);
+        return;
+    };
+
+    const session = try app.db.getSession(sessionId) orelse {
+        res.setStatus(std.http.Status.not_found);
+        return;
+    };
+
+    const cryptoContext = session.cryptoContext orelse &([_]u8{});
+
+    const response = GetCryptoContextResponse{ .cryptoContext = cryptoContext };
     try res.json(response, .{});
 }
 

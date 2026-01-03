@@ -12,8 +12,10 @@ pub fn build(b: *std.Build) void {
 
     const cmake_configure = b.addSystemCommand(&.{
         "cmake",
-        "-S", "third-party/openfhe",
-        "-B", openfhe_build_dir,
+        "-S",
+        "third-party/openfhe",
+        "-B",
+        openfhe_build_dir,
         "-DCMAKE_CXX_COMPILER=clang++",
         "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
         "-DBUILD_UNITTESTS=OFF",
@@ -24,7 +26,8 @@ pub fn build(b: *std.Build) void {
 
     const cmake_build = b.addSystemCommand(&.{
         "cmake",
-        "--build", openfhe_build_dir,
+        "--build",
+        openfhe_build_dir,
         "--parallel",
     });
     cmake_build.step.dependOn(&cmake_configure.step);
@@ -81,7 +84,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     openfhe_mod.addIncludePath(b.path("lib"));
-    openfhe_mod.linkLibrary(openfhe_c);  // Links and adds step dependency
+    openfhe_mod.linkLibrary(openfhe_c); // Links and adds step dependency
 
     const mod = b.addModule("GenZ", .{
         // The root source file is the "entry point" of this module. Users of

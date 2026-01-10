@@ -12,25 +12,25 @@ test "e2e: create session and get crypto context" {
 
     std.debug.print("[create session]\n", .{});
 
-    var registerBody: std.Io.Writer.Allocating = .init(alloc);
-    defer registerBody.deinit();
+    var openSessionBody: std.Io.Writer.Allocating = .init(alloc);
+    defer openSessionBody.deinit();
 
-    const registerStatus = try client.fetch(.{
-        .location = .{ .url = api_url ++ "/v0.1.0/register" },
+    const openSessionStatus = try client.fetch(.{
+        .location = .{ .url = api_url ++ "/v0.1.0/openSession" },
         .method = .POST,
         .payload = "",
-        .response_writer = &registerBody.writer,
+        .response_writer = &openSessionBody.writer,
     });
-    try std.testing.expectEqual(.ok, registerStatus.status);
+    try std.testing.expectEqual(.ok, openSessionStatus.status);
 
-    const registerResponse = try std.json.parseFromSlice(
+    const openSessionResponse = try std.json.parseFromSlice(
         struct { sessionId: []const u8 },
         alloc,
-        registerBody.written(),
+        openSessionBody.written(),
         .{},
     );
-    defer registerResponse.deinit();
-    const sessionId = registerResponse.value.sessionId;
+    defer openSessionResponse.deinit();
+    const sessionId = openSessionResponse.value.sessionId;
     std.debug.print("sessionId={s}\n", .{sessionId});
 
     std.debug.print("[get crypto context]\n", .{});

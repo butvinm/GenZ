@@ -35,7 +35,7 @@ pub fn initServer(alloc: std.mem.Allocator, app: *App) !httpz.Server(*App) {
 
     var router = try server.router(.{});
     router.get("/health", health, .{});
-    router.post("/api/v0.1.0/register", register, .{});
+    router.post("/api/v0.1.0/openSession", openSession, .{});
     router.post("/api/v0.1.0/getCryptoContext", getCryptoContext, .{});
 
     return server;
@@ -59,17 +59,17 @@ fn health(_: *App, _: *httpz.Request, res: *httpz.Response) !void {
 // };
 
 /// Open a new session
-const RegisterResponse = struct {
+const OpenSessionResponse = struct {
     sessionId: uuid.urn.Urn,
 };
 
-fn register(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
+fn openSession(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
     const sessionId = uuid.v4.new();
     const issuedAt = std.time.microTimestamp();
 
     try app.db.saveSession(sessionId, issuedAt);
 
-    const response = RegisterResponse{ .sessionId = uuid.urn.serialize(sessionId) };
+    const response = OpenSessionResponse{ .sessionId = uuid.urn.serialize(sessionId) };
     try res.json(response, .{});
 }
 

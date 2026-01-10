@@ -12,60 +12,60 @@ test "e2e: create session and get crypto context" {
 
     std.debug.print("[create session]\n", .{});
 
-    var openSessionBody: std.Io.Writer.Allocating = .init(alloc);
-    defer openSessionBody.deinit();
+    var open_session_body: std.Io.Writer.Allocating = .init(alloc);
+    defer open_session_body.deinit();
 
-    const openSessionStatus = try client.fetch(.{
+    const open_session_status = try client.fetch(.{
         .location = .{ .url = api_url ++ "/v0.1.0/openSession" },
         .method = .POST,
         .payload = "",
-        .response_writer = &openSessionBody.writer,
+        .response_writer = &open_session_body.writer,
     });
-    try std.testing.expectEqual(.ok, openSessionStatus.status);
+    try std.testing.expectEqual(.ok, open_session_status.status);
 
-    const openSessionResponse = try std.json.parseFromSlice(
-        struct { sessionId: []const u8 },
+    const open_session_response = try std.json.parseFromSlice(
+        struct { session_id: []const u8 },
         alloc,
-        openSessionBody.written(),
+        open_session_body.written(),
         .{},
     );
-    defer openSessionResponse.deinit();
-    const sessionId = openSessionResponse.value.sessionId;
-    std.debug.print("sessionId={s}\n", .{sessionId});
+    defer open_session_response.deinit();
+    const session_id = open_session_response.value.session_id;
+    std.debug.print("session_id={s}\n", .{session_id});
 
     std.debug.print("[get crypto context]\n", .{});
 
-    var getCryptoContextBody: std.Io.Writer.Allocating = .init(alloc);
-    defer getCryptoContextBody.deinit();
+    var get_crypto_context_body: std.Io.Writer.Allocating = .init(alloc);
+    defer get_crypto_context_body.deinit();
 
-    const getCryptoContextStatus = try client.fetch(.{
+    const get_crypto_context_status = try client.fetch(.{
         .location = .{ .url = api_url ++ "/v0.1.0/getCryptoContext" },
         .method = .POST,
         .payload = "",
         .extra_headers = &.{
-            .{ .name = "X-Session-Id", .value = sessionId },
+            .{ .name = "X-Session-Id", .value = session_id },
         },
-        .response_writer = &getCryptoContextBody.writer,
+        .response_writer = &get_crypto_context_body.writer,
     });
-    try std.testing.expectEqual(.ok, getCryptoContextStatus.status);
+    try std.testing.expectEqual(.ok, get_crypto_context_status.status);
 
-    const getCryptoContextResponse = try std.json.parseFromSlice(
-        struct { cryptoContext: []const u8 },
+    const get_crypto_context_response = try std.json.parseFromSlice(
+        struct { crypto_context: []const u8 },
         alloc,
-        getCryptoContextBody.written(),
+        get_crypto_context_body.written(),
         .{},
     );
-    defer getCryptoContextResponse.deinit();
-    const cryptoContextEncoded = getCryptoContextResponse.value.cryptoContext;
+    defer get_crypto_context_response.deinit();
+    const crypto_context_encoded = get_crypto_context_response.value.crypto_context;
 
     // Decode base64
-    const ccDecodedSize = try std.base64.standard.Decoder.calcSizeForSlice(cryptoContextEncoded);
-    const ccDecoded = try alloc.alloc(u8, ccDecodedSize);
-    defer alloc.free(ccDecoded);
-    try std.base64.standard.Decoder.decode(ccDecoded, cryptoContextEncoded);
+    const cc_decoded_size = try std.base64.standard.Decoder.calcSizeForSlice(crypto_context_encoded);
+    const cc_decoded = try alloc.alloc(u8, cc_decoded_size);
+    defer alloc.free(cc_decoded);
+    try std.base64.standard.Decoder.decode(cc_decoded, crypto_context_encoded);
 
-    try std.testing.expect(ccDecoded.len > 0);
+    try std.testing.expect(cc_decoded.len > 0);
 
-    const cc = try openfhe.CryptoContext.deserialize(ccDecoded, openfhe.SerialFormat.binary);
+    const cc = try openfhe.CryptoContext.deserialize(cc_decoded, openfhe.SerialFormat.binary);
     std.debug.print("crypto context ring dimension: {}\n", .{cc.getRingDim()});
 }

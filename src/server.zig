@@ -6,13 +6,13 @@ const openfhe = @import("openfhe");
 const db = @import("db.zig");
 
 pub const AppConfig = struct {
-    appHost: []const u8,
-    appPort: u16,
-    dbPort: u16,
-    dbHost: []const u8,
-    dbUser: []const u8,
-    dbPassword: []const u8,
-    dbDatabase: []const u8,
+    app_host: []const u8,
+    app_port: u16,
+    db_port: u16,
+    db_host: []const u8,
+    db_user: []const u8,
+    db_password: []const u8,
+    db_database: []const u8,
 };
 
 pub const App = struct {
@@ -28,8 +28,8 @@ pub const App = struct {
 
 pub fn initServer(alloc: std.mem.Allocator, app: *App) !httpz.Server(*App) {
     var server = try httpz.Server(*App).init(alloc, .{
-        .address = app.config.appHost,
-        .port = app.config.appPort,
+        .address = app.config.app_host,
+        .port = app.config.app_port,
         .request = .{ .max_body_size = 10485760 },
     }, app);
 
@@ -60,56 +60,56 @@ fn health(_: *App, _: *httpz.Request, res: *httpz.Response) !void {
 
 /// Open a new session
 const OpenSessionResponse = struct {
-    sessionId: uuid.urn.Urn,
+    session_id: uuid.urn.Urn,
 };
 
 fn openSession(app: *App, _: *httpz.Request, res: *httpz.Response) !void {
-    const sessionId = uuid.v4.new();
-    const issuedAt = std.time.microTimestamp();
+    const session_id = uuid.v4.new();
+    const issued_at = std.time.microTimestamp();
 
-    try app.db.saveSession(sessionId, issuedAt);
+    try app.db.saveSession(session_id, issued_at);
 
-    const response = OpenSessionResponse{ .sessionId = uuid.urn.serialize(sessionId) };
+    const response = OpenSessionResponse{ .session_id = uuid.urn.serialize(session_id) };
     try res.json(response, .{});
 }
 
 /// Create a crypto context
 const GetCryptoContextResponse = struct {
-    cryptoContext: []const u8,
+    crypto_context: []const u8,
 };
 
 fn getCryptoContext(app: *App, req: *httpz.Request, res: *httpz.Response) !void {
-    const sessionIdHeader = req.headers.get("x-session-id") orelse {
+    const session_id_header = req.headers.get("x-session-id") orelse {
         res.setStatus(std.http.Status.unauthorized);
         return;
     };
-    const sessionId = uuid.urn.deserialize(sessionIdHeader) catch {
+    const session_id = uuid.urn.deserialize(session_id_header) catch {
         res.setStatus(std.http.Status.bad_request);
         return;
     };
 
-    const session = try app.db.getSession(sessionId) orelse {
+    const session = try app.db.getSession(session_id) orelse {
         res.setStatus(std.http.Status.not_found);
         return;
     };
 
-    const ccSerialized = session.cryptoContext orelse blk: {
+    const cc_serialized = session.crypto_context orelse blk: {
         const cc = try openfhe.CryptoContext.createBgv(.{
             .multiplicative_depth = 1,
             .plaintext_modulus = 65537,
         });
-        const ccSerialized = try cc.serialize(openfhe.SerialFormat.binary, res.arena);
+        const cc_serialized = try cc.serialize(openfhe.SerialFormat.binary, res.arena);
 
-        try app.db.setCryptoContext(sessionId, ccSerialized);
+        try app.db.setCryptoContext(session_id, cc_serialized);
 
-        break :blk ccSerialized;
+        break :blk cc_serialized;
     };
 
-    const ccEncodedSize = std.base64.standard.Encoder.calcSize(ccSerialized.len);
-    const ccBuf = try res.arena.alloc(u8, ccEncodedSize);
-    const ccEncoded = std.base64.standard.Encoder.encode(ccBuf, ccSerialized);
+    const cc_encoded_size = std.base64.standard.Encoder.calcSize(cc_serialized.len);
+    const cc_buf = try res.arena.alloc(u8, cc_encoded_size);
+    const cc_encoded = std.base64.standard.Encoder.encode(cc_buf, cc_serialized);
 
-    const response = GetCryptoContextResponse{ .cryptoContext = ccEncoded };
+    const response = GetCryptoContextResponse{ .crypto_context = cc_encoded };
     try res.json(response, .{});
 }
 

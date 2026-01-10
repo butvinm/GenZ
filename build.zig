@@ -207,6 +207,19 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
 
+    // E2E tests (requires running server)
+    const e2e_mod = b.addModule("e2e", .{
+        .root_source_file = b.path("src/e2e.zig"),
+        .target = target,
+    });
+    e2e_mod.addImport("openfhe", openfhe_mod);
+    const e2e_tests = b.addTest(.{
+        .root_module = e2e_mod,
+    });
+    const run_e2e_tests = b.addRunArtifact(e2e_tests);
+    const e2e_step = b.step("e2e", "Run e2e tests (requires running server)");
+    e2e_step.dependOn(&run_e2e_tests.step);
+
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
     // The Zig build system is entirely implemented in userland, which means

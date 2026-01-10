@@ -71,7 +71,7 @@ pub const DB = struct {
         defer conn.release();
 
         const updated = conn.exec(
-            "UPDATE keys SET crypto_context = $2 WHERE session_id = $1",
+            "UPDATE sessions SET crypto_context = $2 WHERE session_id = $1",
             .{ uuid.urn.serialize(sessionId), cryptoContext },
         ) catch |err| return catchPge(err, conn);
 

@@ -1,6 +1,7 @@
 const std = @import("std");
 const httpz = @import("httpz");
 const uuid = @import("uuid");
+const openfhe = @import("openfhe");
 
 const db = @import("db.zig");
 
@@ -92,9 +93,23 @@ fn getCryptoContext(app: *App, req: *httpz.Request, res: *httpz.Response) !void 
         return;
     };
 
-    const cryptoContext = session.cryptoContext orelse &([_]u8{});
+    const ccSerialized = session.cryptoContext orelse blk: {
+        const cc = try openfhe.CryptoContext.createBgv(.{
+            .multiplicative_depth = 1,
+            .plaintext_modulus = 65537,
+        });
+        const ccSerialized = try cc.serialize(openfhe.SerialFormat.binary, res.arena);
 
-    const response = GetCryptoContextResponse{ .cryptoContext = cryptoContext };
+        try app.db.setCryptoContext(sessionId, ccSerialized);
+
+        break :blk ccSerialized;
+    };
+
+    const ccEncodedSize = std.base64.standard.Encoder.calcSize(ccSerialized.len);
+    const ccBuf = try res.arena.alloc(u8, ccEncodedSize);
+    const ccEncoded = std.base64.standard.Encoder.encode(ccBuf, ccSerialized);
+
+    const response = GetCryptoContextResponse{ .cryptoContext = ccEncoded };
     try res.json(response, .{});
 }
 

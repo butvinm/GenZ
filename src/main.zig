@@ -2,6 +2,7 @@ const std = @import("std");
 const httpz = @import("httpz");
 const pg = @import("pg");
 
+const db = @import("db.zig");
 const server = @import("server.zig");
 const openfhe = @import("openfhe");
 
@@ -33,26 +34,30 @@ pub fn main() !void {
         },
     };
 
-    var db = try pg.Pool.init(allocator, .{
-        .connect = .{ .port = config.dbPort, .host = config.dbHost },
-        .auth = .{ .username = config.dbUser, .database = config.dbDatabase, .password = config.dbPassword },
+    var pool = try pg.Pool.init(allocator, .{
+        .connect = .{ .port = config.db_port, .host = config.db_host },
+        .auth = .{ .username = config.db_user, .database = config.db_database, .password = config.db_password },
     });
-    defer db.deinit();
+    defer pool.deinit();
+
+    var app_db = db.DB{ .pool = pool };
 
     var app = server.App{
-        .db = db,
+        .db = &app_db,
         .config = config,
     };
-    try app.initDb();
 
-    var appServer = try server.initServer(allocator, &app);
+    var app_server = try server.initServer(allocator, &app);
     defer {
-        appServer.stop();
-        appServer.deinit();
+        app_server.stop();
+        app_server.deinit();
     }
 
-    std.log.info("Server is listening on http://{s}:{}\n", .{ config.appHost, config.appPort });
-    try appServer.listen();
+    std.log.info("Running database migration", .{});
+    try app_db.migrate();
+
+    std.log.info("Server is listening on http://{s}:{}", .{ config.app_host, config.app_port });
+    try app_server.listen();
 }
 
 pub const ParseArgsResult = union(enum) {
@@ -61,64 +66,64 @@ pub const ParseArgsResult = union(enum) {
 };
 
 pub fn parseArgs(alloc: std.mem.Allocator, args: *std.process.ArgIterator) ParseArgsResult {
-    var appHost: ?[]const u8 = null;
-    var appPort: ?u16 = null;
-    var dbPort: ?u16 = null;
-    var dbHost: ?[]const u8 = null;
-    var dbUser: ?[]const u8 = null;
-    var dbPassword: ?[]const u8 = null;
-    var dbDatabase: ?[]const u8 = null;
+    var app_host: ?[]const u8 = null;
+    var app_port: ?u16 = null;
+    var db_port: ?u16 = null;
+    var db_host: ?[]const u8 = null;
+    var db_user: ?[]const u8 = null;
+    var db_password: ?[]const u8 = null;
+    var db_database: ?[]const u8 = null;
 
     const exec = args.next() orelse "app";
     while (args.next()) |flag| {
         if (std.mem.eql(u8, flag, "--app-host")) {
-            appHost = args.next() orelse return expectedArgValueError(alloc, flag, "app host");
+            app_host = args.next() orelse return expectedArgValueError(alloc, flag, "app host");
         } else if (std.mem.eql(u8, flag, "--app-port")) {
-            const appPortArg = args.next() orelse return expectedArgValueError(alloc, flag, "app port");
-            appPort = std.fmt.parseInt(u16, appPortArg, 10) catch {
+            const app_port_arg = args.next() orelse return expectedArgValueError(alloc, flag, "app port");
+            app_port = std.fmt.parseInt(u16, app_port_arg, 10) catch {
                 return .{ .err = alloc.dupe(u8, "app port must be a number") catch "app port must be a number" };
             };
         } else if (std.mem.eql(u8, flag, "--db-host")) {
-            dbHost = args.next() orelse return expectedArgValueError(alloc, flag, "db host");
+            db_host = args.next() orelse return expectedArgValueError(alloc, flag, "db host");
         } else if (std.mem.eql(u8, flag, "--db-port")) {
-            const dbPortArg = args.next() orelse return expectedArgValueError(alloc, flag, "db port");
-            dbPort = std.fmt.parseInt(u16, dbPortArg, 10) catch {
+            const db_port_arg = args.next() orelse return expectedArgValueError(alloc, flag, "db port");
+            db_port = std.fmt.parseInt(u16, db_port_arg, 10) catch {
                 return .{ .err = alloc.dupe(u8, "db port must be a number") catch "db port must be a number" };
             };
         } else if (std.mem.eql(u8, flag, "--db-user")) {
-            dbUser = args.next() orelse return expectedArgValueError(alloc, flag, "db user");
+            db_user = args.next() orelse return expectedArgValueError(alloc, flag, "db user");
         } else if (std.mem.eql(u8, flag, "--db-password")) {
-            dbPassword = args.next() orelse return expectedArgValueError(alloc, flag, "db password");
+            db_password = args.next() orelse return expectedArgValueError(alloc, flag, "db password");
         } else if (std.mem.eql(u8, flag, "--db-database")) {
-            dbDatabase = args.next() orelse return expectedArgValueError(alloc, flag, "db database");
+            db_database = args.next() orelse return expectedArgValueError(alloc, flag, "db database");
         }
     }
 
-    if (appHost == null) return missedArgError(alloc, exec, "--app-host");
-    if (appPort == null) return missedArgError(alloc, exec, "--app-port");
-    if (dbHost == null) return missedArgError(alloc, exec, "--db-host");
-    if (dbPort == null) return missedArgError(alloc, exec, "--db-port");
-    if (dbUser == null) return missedArgError(alloc, exec, "--db-user");
-    if (dbPassword == null) return missedArgError(alloc, exec, "--db-password");
-    if (dbDatabase == null) return missedArgError(alloc, exec, "--db-database");
+    if (app_host == null) return missedArgError(alloc, exec, "--app-host");
+    if (app_port == null) return missedArgError(alloc, exec, "--app-port");
+    if (db_host == null) return missedArgError(alloc, exec, "--db-host");
+    if (db_port == null) return missedArgError(alloc, exec, "--db-port");
+    if (db_user == null) return missedArgError(alloc, exec, "--db-user");
+    if (db_password == null) return missedArgError(alloc, exec, "--db-password");
+    if (db_database == null) return missedArgError(alloc, exec, "--db-database");
 
     return .{ .ok = .{
-        .appHost = appHost.?,
-        .appPort = appPort.?,
-        .dbPort = dbPort.?,
-        .dbHost = dbHost.?,
-        .dbUser = dbUser.?,
-        .dbPassword = dbPassword.?,
-        .dbDatabase = dbDatabase.?,
+        .app_host = app_host.?,
+        .app_port = app_port.?,
+        .db_port = db_port.?,
+        .db_host = db_host.?,
+        .db_user = db_user.?,
+        .db_password = db_password.?,
+        .db_database = db_database.?,
     } };
 }
 
-fn expectedArgValueError(alloc: std.mem.Allocator, argFlag: []const u8, argName: []const u8) ParseArgsResult {
-    const msg = std.fmt.allocPrint(alloc, "{s}: expected {s} value", .{ argFlag, argName }) catch "expected argument value";
+fn expectedArgValueError(alloc: std.mem.Allocator, arg_flag: []const u8, arg_name: []const u8) ParseArgsResult {
+    const msg = std.fmt.allocPrint(alloc, "{s}: expected {s} value", .{ arg_flag, arg_name }) catch "expected argument value";
     return .{ .err = msg };
 }
 
-fn missedArgError(alloc: std.mem.Allocator, exec: []const u8, argFlag: []const u8) ParseArgsResult {
+fn missedArgError(alloc: std.mem.Allocator, exec: []const u8, arg_flag: []const u8) ParseArgsResult {
     const msg = std.fmt.allocPrint(alloc,
         \\{s} missing
         \\usage: {s} [options]
@@ -130,6 +135,6 @@ fn missedArgError(alloc: std.mem.Allocator, exec: []const u8, argFlag: []const u
         \\  --db-user        Database user
         \\  --db-password    Database password
         \\  --db-database    Database name
-    , .{ argFlag, exec }) catch "error: missing required argument";
+    , .{ arg_flag, exec }) catch "error: missing required argument";
     return .{ .err = msg };
 }

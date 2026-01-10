@@ -12,8 +12,10 @@ pub fn build(b: *std.Build) void {
 
     const cmake_configure = b.addSystemCommand(&.{
         "cmake",
-        "-S", "third-party/openfhe",
-        "-B", openfhe_build_dir,
+        "-S",
+        "third-party/openfhe",
+        "-B",
+        openfhe_build_dir,
         "-DCMAKE_CXX_COMPILER=clang++",
         "-DCMAKE_CXX_FLAGS=-stdlib=libc++",
         "-DBUILD_UNITTESTS=OFF",
@@ -24,7 +26,8 @@ pub fn build(b: *std.Build) void {
 
     const cmake_build = b.addSystemCommand(&.{
         "cmake",
-        "--build", openfhe_build_dir,
+        "--build",
+        openfhe_build_dir,
         "--parallel",
     });
     cmake_build.step.dependOn(&cmake_configure.step);
@@ -81,7 +84,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     openfhe_mod.addIncludePath(b.path("lib"));
-    openfhe_mod.linkLibrary(openfhe_c);  // Links and adds step dependency
+    openfhe_mod.linkLibrary(openfhe_c); // Links and adds step dependency
 
     const mod = b.addModule("GenZ", .{
         // The root source file is the "entry point" of this module. Users of
@@ -203,6 +206,19 @@ pub fn build(b: *std.Build) void {
     // A top level step for running tests.
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
+
+    // E2E tests (requires running server)
+    const e2e_mod = b.addModule("e2e", .{
+        .root_source_file = b.path("src/e2e.zig"),
+        .target = target,
+    });
+    e2e_mod.addImport("openfhe", openfhe_mod);
+    const e2e_tests = b.addTest(.{
+        .root_module = e2e_mod,
+    });
+    const run_e2e_tests = b.addRunArtifact(e2e_tests);
+    const e2e_step = b.step("e2e", "Run e2e tests (requires running server)");
+    e2e_step.dependOn(&run_e2e_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
